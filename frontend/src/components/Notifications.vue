@@ -41,13 +41,13 @@
           </div>
         </div>
         <!-- Progress bar for the timeout of the notifications -->
-        <div 
-          v-if="notification.autoclose && !notification.persistent" 
+        <div
+          v-if="notification.autoclose && !notification.persistent"
           class="notification-progress-bar"
         >
-          <div 
-            class="notification-progress-fill" 
-            :style="{ 
+          <div
+            class="notification-progress-fill"
+            :style="{
               width: `${notification.progress || 100}%`
             }"
           ></div>
@@ -119,7 +119,7 @@ export default {
     },
     startDrag(event, notificationId) {
       const clientX = event.type.includes('touch') ? event.touches[0].clientX : event.clientX;
-      
+
       this.dragState = {
         isDragging: true,
         startX: clientX,
