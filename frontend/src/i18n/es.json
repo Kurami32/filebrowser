@@ -240,7 +240,8 @@
     "unarchive": "Extraer",
     "unarchiveMessage": "Elije dónde quieres extraer el archivo:",
     "unarchiveDestination": "Extraer a:",
-    "unarchiveSuccess": "¡Archivo extraído con éxito!"
+    "unarchiveSuccess": "¡Archivo extraído con éxito!",
+    "downloadFailed": "Fallo en la descarga por trozos. Si se repite, intente reducir el tamaño de los trozos: {message}"
   },
   "search": {
     "smallerThan": "Menor que:",
@@ -335,9 +336,7 @@
     "passwordsDoNotMatch": "Las contraseñas no coinciden",
     "loginMethod": "Método de inicio de sesión",
     "loginMethods": {
-      "password": "Contraseña",
-      "oidc": "OIDC",
-      "proxy": "Proxy"
+      "password": "Contraseña"
     },
     "shareSettings": "Recursos compartidos",
     "adminOptions": "Opciones de administrador",
@@ -784,7 +783,10 @@
     "saveAbortedMessage": "No se ha podido guardar el archivo. El nombre del archivo \"{activeFile}\" no coincide con el que estas intentando guardar ({tryingToSave}).",
     "syncFailed": "No se ha podido encontrar la ruta para \"{filename}\" después de 5 intentos - Se cerrará el editor para evitar la corrupción de datos.",
     "fileSaved": "!Se guardo el archivo correctamente!",
-    "errorSavingFile": "Error al guardar el archivo: {error}"
+    "errorSavingFile": "Error al guardar el archivo: {error}",
+    "lines": "{count} líneas",
+    "words": "{count} palabras",
+    "chars": "{count} caracteres"
   },
   "player": {
     "LoopEnabled": "Bucle activado",
