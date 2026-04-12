@@ -1090,7 +1090,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Path to the directory",
+                        "description": "Path to the directory or file",
                         "name": "path",
                         "in": "query",
                         "required": true
@@ -1101,6 +1101,12 @@ const docTemplate = `{
                         "name": "source",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "When true, include embedded album art bytes in audio metadata",
+                        "name": "albumArt",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3070,7 +3076,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Updates the details of a user identified by ID.",
+                "description": "Updates the details of a user identified by ID. When updating the target user's password the actor must send their current password in the X-Password header",
                 "consumes": [
                     "application/json"
                 ],
@@ -3092,6 +3098,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "Actor's current password (URL-encoded); required when changing a password user's password",
+                        "name": "X-Password",
+                        "in": "header"
+                    },
+                    {
                         "description": "User data to update",
                         "name": "data",
                         "in": "body",
@@ -3107,6 +3119,15 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid or missing actor password for password change",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -3271,6 +3292,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Path within the share",
                         "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "When true, include embedded album art bytes in audio metadata (heavier)",
+                        "name": "albumArt",
                         "in": "query"
                     }
                 ],
@@ -6821,6 +6848,10 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/users.SourceScope"
                     }
+                },
+                "showCopyPath": {
+                    "description": "show copy path action in the context menu",
+                    "type": "boolean"
                 },
                 "showFirstLogin": {
                     "type": "boolean"
