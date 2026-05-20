@@ -1,0 +1,103 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noUselessConstructor": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off"
+      },
+      "correctness": {
+        "noUnreachable": "off"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": false,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 100,
+    "attributePosition": "auto"
+  },
+  "javascript": {
+    "experimentalEmbeddedSnippetsEnabled": true,
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always",
+      "bracketSameLine": false,
+      "bracketSpacing": true,
+      "quoteProperties": "asNeeded"
+    },
+    "globals": ["node"]
+  },
+  "json": {
+    "formatter": {
+      "enabled": true,
+      "indentStyle": "space",
+      "indentWidth": 2
+    }
+  },
+  "css": {
+    "formatter": {
+      "enabled": true
+    }
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "!node_modules/",
+      "!dist/",
+      "!**/playwright-report/",
+      "!**/test-results/",
+      "!*.min.*",
+      "!coverage/",
+      "!../backend/http/dist/",
+      "!../backend/http/embed/",
+      "!public/config.generated.yaml",
+      "src/**/*.js",
+      "src/**/*.ts",
+      "src/**/*.vue",
+      "scripts/**/*.js",
+      "tests/**/*.ts",
+      "tests/**/*.js",
+      "*.config.js",
+      "*.config.ts",
+      "*.json"
+    ]
+  },
+  "overrides": [
+    {
+      "includes": ["src/**/*.vue"],
+      "linter": {
+        "rules": {
+        }
+      }
+    },
+    {
+      "includes": ["scripts/**/*.js", "tests/**/*.ts", "*.config.ts"],
+      "javascript": {
+        "globals": ["node"]
+      }
+    },
+    {
+      "includes": ["tests/**/*.spec.ts", "tests/playwright/**/*.ts"],
+      "javascript": {
+        "globals": ["node", "browser"]
+      }
+    }
+  ]
+}
