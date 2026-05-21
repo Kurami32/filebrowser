@@ -6,7 +6,8 @@
       "**",
       "!node_modules/",
       "!dist/",
-      "!public/config.generated.yaml"
+      "!public/config.generated.yaml",
+      "!public/index.html"
     ]
   },
   "vcs": {
@@ -20,7 +21,8 @@
     "rules": {
       "recommended": true,
       "complexity": {
-        "recommended": true
+        "recommended": true,
+        "noImportantStyles": "off"
       },
       "correctness": {
         "recommended": true
@@ -32,10 +34,14 @@
         "recommended": true
       },
       "style": {
-        "recommended": true
+        "recommended": true,
+        "noDescendingSpecificity": "off"
       },
       "suspicious": {
         "recommended": true
+      },
+      "a11y": {
+        "useMediaCaption": "off"
       }
     }
   },

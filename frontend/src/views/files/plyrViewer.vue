@@ -9,6 +9,7 @@
     >
       <!-- Desktop panel button, will auto‑hide only when panel is closed -->
       <button
+        type="button"
         v-if="showButtons && previewType === 'audio' && !isMobile"
         @click="showDesktopPanel = !showDesktopPanel"
         @touchstart="resetButtonTimer"
@@ -33,8 +34,8 @@
           <div class="album-art-container"
                 :class="{ 'no-artwork': !albumArtUrl }"
                 :style="{
-                  maxHeight: displayArtSize + 'em',
-                  maxWidth: displayArtSize + 'em'
+                  maxHeight: `${displayArtSize}em`,
+                  maxWidth: `${displayArtSize}em`
                 }"
                @mouseenter="onAlbumArtHover"
                @mouseleave="onAlbumArtLeave"
@@ -88,7 +89,7 @@
             @click.stop="syncedLyrics && seekToLyric(line.timestamp)"
             tabindex="0"
             role="button"
-            :aria-label="syncedLyrics ? 'Seek to ' + line.text : undefined"
+            :aria-label="syncedLyrics ? `Seek to ${line.text}` : undefined"
           >
             {{ line.text }}
           </p>
@@ -176,6 +177,7 @@
 
     <!-- Queue button – visible on videos, in audio on mobile -->
     <button
+      type="button"
       v-if="showButtons && showQueueButton"
       class="queue-button floating"
       :class="{
@@ -194,6 +196,7 @@
 
     <!-- Lyrics button (left side) – only on mobile when lyrics exist -->
     <button
+      type="button"
       v-if="showButtons && isMobile && lyrics.length"
       class="queue-button floating lyrics-fab-left"
       :class="{
@@ -211,6 +214,7 @@
 
     <!-- Lyrics scroll lock (mobile, bottom‑right) – visible while lyrics overlay is open -->
     <button
+      type="button"
       v-if="isMobile && previewType === 'audio' && !useDefaultMediaPlayer && showMobileLyrics && lyrics.length && syncedLyrics"
       class="queue-button floating lyrics-lock-fab"
       :class="{
@@ -245,12 +249,12 @@
 </template>
 
 <script>
-import { state, mutations, getters } from '@/store';
+import Plyr from 'plyr';
+import AudioPanel from "@/components/files/AudioPanel.vue";
+import { getters, mutations, state } from '@/store';
 import { url } from '@/utils';
 import { globalVars } from '@/utils/constants';
 import { getSubtitleFormatExtension } from '@/utils/subtitles';
-import AudioPanel from "@/components/files/AudioPanel.vue";
-import Plyr from 'plyr';
 
 const PLYR_CAPTION_SIZE_IDS = ['small', 'medium', 'large', 'xlarge'];
 /** Same localStorage key Plyr uses for `captions`, `language`, etc. (see Plyr defaults `storage.key`). */
@@ -611,7 +615,7 @@ export default {
         clickToPlay: true,
         resetOnEnd: false,
         preload: 'metadata',
-        iconUrl: globalVars.baseURL + 'public/static/img/plyr.svg',
+        iconUrl: `${globalVars.baseURL}public/static/img/plyr.svg`,
         // Blob/async tracks need addtrack → captions.update; otherwise meta never fills and toggle CC throws (track undefined).
         // Do not call toggleCaptions() here — Plyr already applies `plyr` localStorage for captions on/off.
         captions: {
@@ -745,15 +749,12 @@ export default {
       // Reset playback state
       navigator.mediaSession.playbackState = 'none';
     },
-    destroyPlyr(options = {}) {
-      const preserveMediaShell = options.preserveMediaShell === true;
+    destroyPlyr() {
       if (this.player) {
         this.teardownVideoSwipeGestures();
         this.teardownDoubleTapSeek();
         this.clearMediaSession();
-        if (!preserveMediaShell) {
-          this.cleanupAlbumArt();
-        }
+        this.cleanupAlbumArt();
         this.player.off();
         this.player.destroy();
         this.player = null;
@@ -857,7 +858,9 @@ export default {
         return;
       }
       const el = this.player.elements.container;
-      PLYR_CAPTION_SIZE_IDS.forEach((id) => el.classList.remove(`plyr-caption-size--${id}`));
+      PLYR_CAPTION_SIZE_IDS.forEach((id) => {
+        el.classList.remove(`plyr-caption-size--${id}`);
+      });
       el.classList.add(`plyr-caption-size--${this.getStoredCaptionSize()}`);
     },
     syncCaptionSizeSettingsVisibility() {
@@ -908,7 +911,7 @@ export default {
 
         const menu = captionPanel.querySelector('div[role="menu"]');
         menu.innerHTML = PLYR_CAPTION_SIZE_IDS.map(
-          (id) => `<button data-plyr="caption-size" type="button" role="menuitemradio" class="plyr__control" aria-checked="${current === id}" value="${id}">
+          (id) => `<button type="button" data-plyr="caption-size" role="menuitemradio" class="plyr__control" aria-checked="${current === id}" value="${id}">
                 <span>${labels[id]}</span>
               </button>`,
         ).join('');
@@ -1077,6 +1080,7 @@ export default {
       }
     },
     cleanupAlbumArt() {
+      if (this.previewType !== "audio") return;
       if (this?.albumArtUrl.startsWith('blob:')) {
         URL.revokeObjectURL(this.albumArtUrl);
       }
@@ -2006,7 +2010,9 @@ export default {
                 console.log('Playback mode changed to:', value);
 
                 // Update visual state
-                buttons.forEach(btn => btn.setAttribute('aria-checked', 'false'));
+                buttons.forEach(btn => {
+                  btn.setAttribute('aria-checked', 'false');
+                });
                 event.currentTarget.setAttribute('aria-checked', 'true');
 
                 // Update button text

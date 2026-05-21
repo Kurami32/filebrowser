@@ -1,7 +1,7 @@
-import { fetchURL, adjustedData } from "./utils";
 import { notify } from "@/notify";
-import { getApiPath, getPublicApiPath } from "@/utils/url.js";
 import { state } from "@/store";
+import { getApiPath, getPublicApiPath } from "@/utils/url.js";
+import { adjustedData, fetchURL } from "./utils";
 
 // GET /api/media/subtitles
 export async function getSubtitleContent(source, path, subtitleName, embedded = false) {
