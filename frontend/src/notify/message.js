@@ -117,7 +117,7 @@ function parseMessage(message) {
       Object.hasOwn(apiMessage, 'status') &&
       Object.hasOwn(apiMessage, 'message')
     ) {
-      eturn `${apiMessage.status}: ${apiMessage.message}`
+      return `${apiMessage.status}: ${apiMessage.message}`
     } else {
       // Fallback to showing the normalized message if it is not an API error shape
       return normalizedMessage
