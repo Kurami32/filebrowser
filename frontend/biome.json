@@ -1,12 +1,5 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "assist": {
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
-  },
   "linter": {
     "enabled": true,
     "rules": {
@@ -59,6 +52,7 @@
   "files": {
     "ignoreUnknown": true,
     "includes": [
+      "**",
       "!node_modules/",
       "!dist/",
       "!**/playwright-report/",
