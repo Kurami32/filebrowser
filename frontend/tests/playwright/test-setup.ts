@@ -182,6 +182,8 @@ export function setupErrorTracking(page: Page) {
  * @param message - Expected message text (string or RegExp)
  * @returns Locator for the matching notification or toast message
  */
+// In frontend/tests/playwright/test-setup.ts, update the checkForNotification function (around line 228-246):
+
 export async function checkForNotification(page: Page, message: string | RegExp): Promise<import('@playwright/test').Locator> {
   // Check both notifications and toasts
   const notificationMessage = page.locator('.notification-message');
@@ -241,7 +243,24 @@ export async function checkForNotification(page: Page, message: string | RegExp)
           }
         }
       } catch {
-        // Not JSON, continue checking other notifications
+        try {
+          const unescaped = JSON.parse(`"${notifText}"`);
+          const parsed = JSON.parse(unescaped);
+          if (parsed.message) {
+            const fullMessage = `${parsed.status}: ${parsed.message}`;
+            if (typeof message === 'string') {
+              if (fullMessage.includes(message)) {
+                return notificationMessage.filter({ hasText: notifText }).first();
+              }
+            } else {
+              if (message.test(fullMessage)) {
+                return notificationMessage.filter({ hasText: notifText }).first();
+              }
+            }
+          }
+        } catch {
+          // Not JSON, continue checking other notifications
+        }
       }
     }
 
