@@ -14,8 +14,8 @@ async function updateSourceInfo() {
   try {
     const sourceinfo = await settingsApi.sources()
     mutations.updateSourceInfo(sourceinfo)
-  } catch (_err) {
-    mutations.updateSourceInfo('error')
+  } catch (err) {
+    mutations.updateSourceInfo(err)
   }
 }
 

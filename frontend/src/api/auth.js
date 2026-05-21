@@ -30,7 +30,7 @@ export async function login(username, password, recaptcha, otp) {
 
   try {
     body = JSON.parse(bodyText);
-  } catch (_e) {
+  } catch {
     body = { message: bodyText };
   }
 
