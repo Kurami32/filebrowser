@@ -1,4 +1,5 @@
-import { test as base, expect, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 
 /**
  * Standalone helper function to open the context menu (File-Actions button)
@@ -105,7 +106,7 @@ export function setupErrorTracking(page: Page) {
               detailedError = `${firstArg.name || 'Error'}: ${firstArg.message}`;
             }
           }
-        } catch (e) {
+        } catch (_e) {
           // If we can't extract detailed info, try to get string representation of args
           try {
             const argsText = await Promise.all(
@@ -182,8 +183,6 @@ export function setupErrorTracking(page: Page) {
  * @param message - Expected message text (string or RegExp)
  * @returns Locator for the matching notification or toast message
  */
-// In frontend/tests/playwright/test-setup.ts, update the checkForNotification function (around line 228-246):
-
 export async function checkForNotification(page: Page, message: string | RegExp): Promise<import('@playwright/test').Locator> {
   // Check both notifications and toasts
   const notificationMessage = page.locator('.notification-message');
@@ -225,45 +224,6 @@ export async function checkForNotification(page: Page, message: string | RegExp)
       notificationMessage.allTextContents(),
       toastMessage.allTextContents(),
     ]);
-
-    // Check if any notification text contains JSON data
-    for (const notifText of notificationTexts) {
-      try {
-        const parsed = JSON.parse(notifText);
-        if (parsed.message) {
-          const fullMessage = `${parsed.status}: ${parsed.message}`;
-          if (typeof message === 'string') {
-            if (fullMessage.includes(message)) {
-              return notificationMessage.filter({ hasText: notifText }).first();
-            }
-          } else {
-            if (message.test(fullMessage)) {
-              return notificationMessage.filter({ hasText: notifText }).first();
-            }
-          }
-        }
-      } catch {
-        try {
-          const unescaped = JSON.parse(`"${notifText}"`);
-          const parsed = JSON.parse(unescaped);
-          if (parsed.message) {
-            const fullMessage = `${parsed.status}: ${parsed.message}`;
-            if (typeof message === 'string') {
-              if (fullMessage.includes(message)) {
-                return notificationMessage.filter({ hasText: notifText }).first();
-              }
-            } else {
-              if (message.test(fullMessage)) {
-                return notificationMessage.filter({ hasText: notifText }).first();
-              }
-            }
-          }
-        } catch {
-          // Not JSON, continue checking other notifications
-        }
-      }
-    }
-
     const allTexts = {
       notifications: notificationTexts,
       toasts: toastTexts,
