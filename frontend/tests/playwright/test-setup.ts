@@ -223,6 +223,28 @@ export async function checkForNotification(page: Page, message: string | RegExp)
       notificationMessage.allTextContents(),
       toastMessage.allTextContents(),
     ]);
+
+    // Check if any notification text contains JSON data
+    for (const notifText of notificationTexts) {
+      try {
+        const parsed = JSON.parse(notifText);
+        if (parsed.message) {
+          const fullMessage = `${parsed.status}: ${parsed.message}`;
+          if (typeof message === 'string') {
+            if (fullMessage.includes(message)) {
+              return notificationMessage.filter({ hasText: notifText }).first();
+            }
+          } else {
+            if (message.test(fullMessage)) {
+              return notificationMessage.filter({ hasText: notifText }).first();
+            }
+          }
+        }
+      } catch {
+        // Not JSON, continue checking other notifications
+      }
+    }
+
     const allTexts = {
       notifications: notificationTexts,
       toasts: toastTexts,
