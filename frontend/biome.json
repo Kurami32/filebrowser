@@ -55,22 +55,7 @@
       "**",
       "!node_modules/",
       "!dist/",
-      "!**/playwright-report/",
-      "!**/test-results/",
-      "!*.min.*",
-      "!coverage/",
-      "!../backend/http/dist/",
-      "!../backend/http/embed/",
-      "!public/config.generated.yaml",
-      "src/**/*.js",
-      "src/**/*.ts",
-      "src/**/*.vue",
-      "scripts/**/*.js",
-      "tests/**/*.ts",
-      "tests/**/*.js",
-      "*.config.js",
-      "*.config.ts",
-      "*.json"
+      "!public/config.generated.yaml"
     ]
   },
   "overrides": [
