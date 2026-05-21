@@ -90,7 +90,7 @@ export async function fetchDirectoryMediaMetadataPublic(path, hash, password = "
     let data = null;
     try {
       data = await response.json();
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
     if (data?.message) {

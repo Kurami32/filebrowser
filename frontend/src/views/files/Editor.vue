@@ -37,8 +37,7 @@ export default {
       default: null // null means auto-determine
     }
   },
-  data: function () {
-    return {
+  data: () => ({
       editor: null, // The editor instance
       isDirty: false,
       originalReq: null,
@@ -47,8 +46,7 @@ export default {
       navigationGuard: null, // Navigation guard to prevent navigation with unsaved changes
       isPromptOpen: false, // Track if prompt is currently open for avoid navigation
       pendingNavigation: null, // Store pending navigation while prompt is open
-    };
-  },
+    }),
   computed: {
     permissions() {
       return getters.permissions();
