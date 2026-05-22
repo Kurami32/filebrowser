@@ -48,7 +48,8 @@
         "noRedundantAlt": "off",
         "noSvgWithoutTitle": "off",
         "useAriaPropsForRole": "off",
-        "useGenericFontNames": "off"
+        "useGenericFontNames": "off",
+        "noAutofocus": "off"
       }
     }
   },

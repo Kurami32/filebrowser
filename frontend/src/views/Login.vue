@@ -40,7 +40,7 @@
                 help <!-- eslint-disable-line @intlify/vue-i18n/no-raw-text -->
               </i>
             </div>
-            <input class="input" type="text" autocapitalize="off" v-model="username"
+            <input autofocus class="input" type="text" autocapitalize="off" v-model="username"
               :placeholder="$t('general.username')" />
             <input class="input" type="password" v-model="password" :placeholder="$t('general.password')" />
             <input class="input" v-if="createMode" type="password" v-model="passwordConfirm"
