@@ -103,14 +103,14 @@ export default {
     },
   },
   data: () => ({
-      current: window.location.pathname,
-      destPath: "/", // Start at root of selected source
-      destSource: null, // Will be set by FileList component
-      localItems: [], // Will hold the items to operate on
-      isLoading: false, // Track loading state for spinner
-      showNewDirInput: false, // When true will replace the new folder button with a input field
-      newDirName: "",
-    }),
+    current: window.location.pathname,
+    destPath: "/", // Start at root of selected source
+    destSource: null, // Will be set by FileList component
+    localItems: [], // Will hold the items to operate on
+    isLoading: false, // Track loading state for spinner
+    showNewDirInput: false, // When true will replace the new folder button with a input field
+    newDirName: "",
+  }),
   computed: {
     destContainsSrc() {
       if (!this.destPath) {

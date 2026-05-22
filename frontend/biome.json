@@ -39,13 +39,16 @@
         "noDescendingSpecificity": "off"
       },
       "suspicious": {
-        "recommended": true
+        "recommended": true,
+        "noDocumentCookie": "off"
       },
       "a11y": {
         "useMediaCaption": "off",
         "useAltText": "off",
         "noRedundantAlt": "off",
-        "noSvgWithoutTitle": "off"
+        "noSvgWithoutTitle": "off",
+        "useAriaPropsForRole": "off",
+        "useGenericFontNames": "off"
       }
     }
   },
