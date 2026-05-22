@@ -218,4 +218,3 @@ async function eventRouter (eventType, message) {
       console.log('Unknown SSE event:', eventType, message)
   }
 }
-
