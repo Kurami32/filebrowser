@@ -69,7 +69,7 @@ export const test = base.extend<{
     });
   },
   theme: async ({}, use, testInfo) => {
-    const theme = (testInfo.project.use as any).theme || 'dark';
+    const theme = (testInfo.project.use as { theme?: 'light' | 'dark' }).theme || 'dark';
     await use(theme);
   },
   checkForNotification: async ({ page }, use) => {
