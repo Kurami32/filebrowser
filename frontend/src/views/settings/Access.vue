@@ -1,7 +1,7 @@
 <template>
   <button
     type="button"
-    class="buttonfloating-action-button"
+    class="button floating-action-button"
     @click="addAccess"
   >
    {{ $t("general.new") }}
