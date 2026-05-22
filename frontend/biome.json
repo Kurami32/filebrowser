@@ -25,7 +25,8 @@
         "noImportantStyles": "off"
       },
       "correctness": {
-        "recommended": true
+        "recommended": true,
+        "noUnknownPseudoClass": "off"
       },
       "performance": {
         "recommended": true
@@ -41,14 +42,20 @@
         "recommended": true
       },
       "a11y": {
-        "useMediaCaption": "off"
+        "useMediaCaption": "off",
+        "useAltText": "off",
+        "noRedundantAlt": "off",
+        "noSvgWithoutTitle": "off"
       }
     }
   },
   "assist": {
     "enabled": true,
     "actions": {
-      "recommended": true
+      "recommended": true,
+      "source": {
+        "organizeImports": "off"
+      }
     }
   },
   "formatter": {
