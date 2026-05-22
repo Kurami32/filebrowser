@@ -132,7 +132,14 @@
       }
     },
     {
-      "includes": ["tests/**/*.spec.ts", "tests/playwright/**/*.ts"],
+      "includes": ["tests/playwright/**", "tests/mocks/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noEmptyPattern": "off"
+          }
+        }
+      },
       "javascript": {
         "globals": ["node", "browser"]
       }
