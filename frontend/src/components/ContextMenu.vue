@@ -193,8 +193,6 @@
       <action v-if="hasDownload" icon="file_download" :label="$t('general.download')" @action="startDownload" />
       <action v-if="showSendToAppInPreview" icon="ios_share" :label="$t('buttons.sendToApp')" @action="sendToAppFromPreview" />
       <action v-if="showUnarchiveInOverflow" icon="folder_open" :label="$t('prompts.unarchive')" @action="showUnarchivePromptFromPreview" />
-      <action v-if="showEdit" icon="edit" :label="$t('general.edit')" @action="edit()" />
-      <action v-if="markdownPreview" icon="visibility" :label="$t('general.preview')" @action="switchToMarkdown" />
       <action v-if="showSave" icon="save" :label="$t('general.save')" @action="save()" />
       <action v-if="showDelete" icon="delete" :label="$t('general.delete')" @action="showDeletePrompt" />
     </div>
@@ -212,7 +210,6 @@ import { copyToClipboard } from "@/utils/clipboard";
 import { globalVars } from "@/utils/constants.js";
 import downloadFiles from "@/utils/download";
 import { canNativeShare, nativeShareFile } from "@/utils/nativeShare";
-import { isRichTextPreviewMimeType } from "@/utils/mimetype";
 
 function isArchivePath(pathOrName) {
   if (!pathOrName || typeof pathOrName !== "string") return false;
@@ -414,7 +411,7 @@ export default {
       return false
     },
     hasOverflowItems() {
-      return this.showEdit || this.showDelete || this.showSave || this.showGoToRaw || this.hasDownload || this.showUnarchiveInOverflow;
+      return this.showDelete || this.showSave || this.showGoToRaw || this.hasDownload || this.showUnarchiveInOverflow;
     },
     showUnarchiveInOverflow() {
       if (!this.permissions.create || getters.isShare()) return false;
@@ -427,10 +424,6 @@ export default {
       }
       const cv = getters.currentView();
       return cv === "preview" || cv === "markdownViewer" || cv === "editor";
-    },
-    showEdit() {
-      const cv = getters.currentView();
-      return cv === "markdownViewer" && this.permissions.modify;
     },
     showDelete() {
       if (this.showLimitedOptions) return false;
@@ -499,10 +492,6 @@ export default {
     },
     currentPrompt() {
       return getters.currentPrompt();
-    },
-    markdownPreview() {
-      if (getters.currentView() !== 'editor') return false;
-      return isRichTextPreviewMimeType(state.req.type);
     },
   },
   watch: {
@@ -883,12 +872,6 @@ export default {
           source: source,
         },
       });
-    },
-    async edit() {
-      this.$router.replace({ hash: '#edit' });
-    },
-    async switchToMarkdown() {
-      this.$router.replace({ hash: '#preview' });
     },
     async save() {
       const button = "save";

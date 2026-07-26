@@ -272,4 +272,8 @@ export interface StoreState {
     chars: number | null;
   };
   editorFontSize: number;
+  markdownSplitView: boolean;
+  editorScrollRatio: number;
+  editorScrollSource: 'editor' | 'viewer' | null;
+  editorScrollPath: string;
 }
