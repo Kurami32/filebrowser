@@ -331,6 +331,12 @@
           :description="$t('profileSettings.editorQuickSaveDescription')"
         />
         <ProfilePreferenceToggle
+          field="editButtonInHeader"
+          section="fileViewer"
+          :name="$t('profileSettings.editButtonInHeader')"
+          :description="$t('profileSettings.editButtonInHeaderDescription')"
+        />
+        <ProfilePreferenceToggle
           field="preferEditorForMarkdown"
           section="fileViewer"
           :name="$t('profileSettings.preferEditorForMarkdown')"

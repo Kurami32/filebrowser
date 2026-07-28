@@ -193,6 +193,8 @@
       <action v-if="hasDownload" icon="file_download" :label="$t('general.download')" @action="startDownload" />
       <action v-if="showSendToAppInPreview" icon="ios_share" :label="$t('buttons.sendToApp')" @action="sendToAppFromPreview" />
       <action v-if="showUnarchiveInOverflow" icon="folder_open" :label="$t('prompts.unarchive')" @action="showUnarchivePromptFromPreview" />
+      <action v-if="showEditButton" icon="edit" :label="$t('general.edit')" @action="goToEdit" />
+      <action v-if="showPreviewButton" icon="visibility" :label="$t('general.preview')" @action="goToPreview" />
       <action v-if="showSave" icon="save" :label="$t('general.save')" @action="save()" />
       <action v-if="showDelete" icon="delete" :label="$t('general.delete')" @action="showDeletePrompt" />
     </div>
@@ -210,6 +212,7 @@ import { copyToClipboard } from "@/utils/clipboard";
 import { globalVars } from "@/utils/constants.js";
 import downloadFiles from "@/utils/download";
 import { canNativeShare, nativeShareFile } from "@/utils/nativeShare";
+import { isRichTextPreviewMimeType } from "@/utils/mimetype";
 
 function isArchivePath(pathOrName) {
   if (!pathOrName || typeof pathOrName !== "string") return false;
@@ -442,6 +445,20 @@ export default {
     },
     isPreview() {
       return getters.isPreviewView();
+    },
+    isSplitViewActive() {
+      return state.editor.markdownSplitView && getters.canSplitView();
+    },
+    showEditButton() {
+      if (this.isSplitViewActive) return false;
+      if (state.user?.editButtonInHeader) return false;
+      return getters.currentView() === "markdownViewer" && this.permissions.modify;
+    },
+    showPreviewButton() {
+      if (this.isSplitViewActive) return false;
+      if (state.user?.editButtonInHeader) return false;
+      if (getters.currentView() !== "editor") return false;
+      return isRichTextPreviewMimeType(state.req.type);
     },
     showSave() {
       const allowEdit = this.permissions.modify || (getters.isShare() && state.shareInfo.allowEdit);
@@ -872,6 +889,14 @@ export default {
           source: source,
         },
       });
+    },
+    goToEdit() {
+      mutations.closeHovers();
+      void this.$router.replace({ hash: "#edit" });
+    },
+    goToPreview() {
+      mutations.closeHovers();
+      void this.$router.replace({ hash: "#preview" });
     },
     async save() {
       const button = "save";
