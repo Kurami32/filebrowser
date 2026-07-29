@@ -16,7 +16,7 @@ const plugins = [
   }),
   // Only compress in production builds
   !isDevBuild && compression({
-    include: /\.(js|woff2|woff)(\?.*)?$/i,
+    include: /\.(js|woff2|woff)(\?|$)/i,
     deleteOriginalAssets: true,
   }),
   // Disable checker in watch mode to prevent task failures
@@ -59,7 +59,14 @@ export default defineConfig(() => {
         input: {
           index: path.resolve(__dirname, "./public/index.html"),
         },
-        output: {},
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/highlight.js")) {
+              return "highlightjs";
+            }
+            return undefined;
+          },
+        },
         // Better error handling in watch mode
         onwarn(warning, warn) {
           // Suppress certain warnings in dev mode
