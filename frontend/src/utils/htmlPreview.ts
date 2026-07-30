@@ -46,6 +46,21 @@ const RESOURCE_ATTRIBUTES: Array<[string, string]> = [
 
 const ALLOWED_ABSOLUTE_URI_PATTERN = /^(https?:|data:|mailto:|tel:|#)/i;
 
+// to stop relative hrefs from navigating the srcdoc iframe against the parent, and
+// to keep anchor links working inside the iframe itself instead (was opening the app inside the iframe)
+const NAV_GUARD_SCRIPT = `document.addEventListener("click", function (e) {
+  var a = e.target && e.target.closest ? e.target.closest("a") : null;
+  if (!a) return;
+  var href = a.getAttribute("href") || "";
+  if (href.charAt(0) !== "#") return;
+  e.preventDefault();
+  var id = href.slice(1);
+  if (id) {
+    var el = document.getElementById(id);
+    if (el) el.scrollIntoView();
+  }
+}, true);`;
+
 function viewTokenForSibling(
   resolvedPath: string,
   baseFilePath: string,
@@ -257,6 +272,18 @@ export function rewriteDocumentStyles(
   });
 }
 
+function navigationGuard(srcdoc: string): string {
+  const doc = new DOMParser().parseFromString(srcdoc, "text/html");
+  const base = doc.createElement("base");
+  base.setAttribute("href", "about:blank");
+  doc.head.insertBefore(base, doc.head.firstChild);
+
+  const guard = doc.createElement("script");
+  guard.textContent = NAV_GUARD_SCRIPT;
+  doc.head.appendChild(guard);
+  return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
+}
+
 export interface HtmlPreview {
   srcdoc: string;
 }
@@ -274,8 +301,8 @@ export function buildHtmlPreview(
 
   DOMPurify.addHook("uponSanitizeAttribute", blockUnsafeUriAttributes);
   try {
-    const srcdoc = String(DOMPurify.sanitize(serialized, HTML_SANITIZE_CONFIG));
-    return { srcdoc };
+    const sanitized = String(DOMPurify.sanitize(serialized, HTML_SANITIZE_CONFIG));
+    return { srcdoc: navigationGuard(sanitized) };
   } finally {
     DOMPurify.removeHook("uponSanitizeAttribute", blockUnsafeUriAttributes);
   }
