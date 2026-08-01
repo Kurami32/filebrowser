@@ -286,8 +286,11 @@ export default {
       this.sizes = setObjectProperty(this.sizes, id, { width, height });
     },
     getPromptProps(prompt) {
+      const rawProps = { ...(prompt.props || {}) };
+      // Title is prompt chrome only (Prompts.vue header); must not fall through as a native tooltip.
+      delete rawProps.title;
       const baseProps = {
-        ...prompt.props,
+        ...rawProps,
         promptId: prompt.id,
       };
       if (prompt.name === "move" || prompt.name === "copy") {
@@ -753,7 +756,6 @@ export default {
 /* Floating window base styles */
 .floating-window {
   border-radius: 1em;
-  border-width: 1.5px;
   position: fixed;
   top: 50%;
   left: 50%;

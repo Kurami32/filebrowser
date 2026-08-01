@@ -2756,6 +2756,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/resources/view-token": {
+            "post": {
+                "description": "Mints or extends a source-scoped view token for inline viewing. Authenticated routes require a web session (not a named API token). Public share routes accept anonymous users when the share allows it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Refresh view token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source name or share hash",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Share hash (public share routes)",
+                        "name": "hash",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Existing view token to extend",
+                        "name": "viewToken",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/web.viewTokenResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Missing permission or API token used",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/settings": {
             "get": {
                 "description": "Returns the current configuration settings for signup, user directories, rules, frontend.",
@@ -4763,6 +4815,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/public/api/resources/view-token": {
+            "post": {
+                "description": "Mints or extends a source-scoped view token for inline viewing. Authenticated routes require a web session (not a named API token). Public share routes accept anonymous users when the share allows it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Refresh view token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source name or share hash",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Share hash (public share routes)",
+                        "name": "hash",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Existing view token to extend",
+                        "name": "viewToken",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/web.viewTokenResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Missing permission or API token used",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/public/api/share/image": {
             "get": {
                 "description": "Returns a resizable preview (large size) for the banner or favicon file of a share",
@@ -5357,7 +5461,7 @@ const docTemplate = `{
                     ]
                 },
                 "migrateFrom": {
-                    "description": "path to old BoltDB database file for migration (optional)",
+                    "description": "path to legacy database file for migration (optional)",
                     "type": "string"
                 },
                 "path": {
@@ -6581,6 +6685,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/users.SidebarLink"
                     }
                 },
+                "singleFileShare": {
+                    "type": "boolean"
+                },
                 "source": {
                     "description": "source display name for API; backend path is Share.SourcePath",
                     "type": "string"
@@ -6752,6 +6859,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/users.SidebarLink"
                     }
                 },
+                "singleFileShare": {
+                    "type": "boolean"
+                },
                 "source": {
                     "description": "source display name for API; backend path is Share.SourcePath",
                     "type": "string"
@@ -6904,6 +7014,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/users.SidebarLink"
                     }
+                },
+                "singleFileShare": {
+                    "type": "boolean"
                 },
                 "source": {
                     "description": "source display name for API; backend path is Share.SourcePath",
@@ -8036,6 +8149,17 @@ const docTemplate = `{
                 },
                 "toSource": {
                     "description": "Source name where contents will be extracted (optional; default: fromSource). Example: \"restored\"",
+                    "type": "string"
+                }
+            }
+        },
+        "web.viewTokenResponse": {
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "viewToken": {
                     "type": "string"
                 }
             }

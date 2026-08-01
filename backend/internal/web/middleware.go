@@ -124,6 +124,7 @@ func withHashFileHelper(fn handleFunc) handleFunc {
 		data.IndexPath = pathWithoutUserScope
 		// skip file fetch for certain apis
 		if (r.Method == "POST" && strings.Contains(r.URL.Path, "/resources")) ||
+			(r.Method == "POST" && strings.Contains(r.URL.Path, "/resources/view-token")) ||
 			(r.Method == "GET" && strings.Contains(r.URL.Path, "/resources/items")) ||
 			(r.Method == "GET" && strings.Contains(r.URL.Path, "/media/metadata")) ||
 			(r.Method == "GET" && strings.Contains(r.URL.Path, "/resources/download")) ||
@@ -156,9 +157,9 @@ func withHashFileHelper(fn handleFunc) handleFunc {
 			file.OnlyOfficeId = ""
 		}
 		if file.Type != "directory" {
-			AttachViewToken(data, source.Name, path, file)
+			AttachViewToken(data, source.Name, file)
 		} else {
-			AttachViewTokensForDirectory(data, source.Name, path, file)
+			AttachViewTokensForDirectory(data, source.Name, file)
 		}
 		file.Path = utils.AddTrailingSlashIfNotExists(path)
 		// Set the file info in the `data` object
@@ -183,20 +184,12 @@ func withAdminHelper(fn handleFunc) handleFunc {
 // This is used by withOrWithoutUserHelper to get user context even when tokens are expired
 func extractUserFromExpiredToken(r *http.Request, data *requestContext) *users.User {
 	if settings.Config.Auth.Methods.NoAuth {
-		admin := settings.Config.Auth.AdminUsername
-		if admin == "" {
-			admin = "admin"
-		}
-		userValue, err := state.GetUserByUsername(admin)
-		var user *users.User
-		if err == nil {
-			user = &userValue
-		}
+		userValue, err := state.ResolveNoAuthUser()
 		if err != nil {
 			logger.Errorf("no auth: %v", err)
 			return nil
 		}
-		return user
+		return &userValue
 	}
 
 	keyFunc := func(token *jwt.Token) (interface{}, error) {
@@ -404,11 +397,7 @@ func LoginHelper(disableOtp bool, fn handleFunc) handleFunc {
 func withUserHelper(fn handleFunc) handleFunc {
 	return func(w http.ResponseWriter, r *http.Request, data *requestContext) (int, error) {
 		if settings.Config.Auth.Methods.NoAuth {
-			admin := settings.Config.Auth.AdminUsername
-			if admin == "" {
-				admin = "admin"
-			}
-			userValue, err := state.GetUserByUsername(admin)
+			userValue, err := state.ResolveNoAuthUser()
 			if err == nil {
 				data.User = &userValue
 			}

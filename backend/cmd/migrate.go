@@ -12,6 +12,7 @@ import (
 	"github.com/gtsteffaniak/filebrowser/backend/internal/database/share"
 	"github.com/gtsteffaniak/filebrowser/backend/internal/database/sqldb"
 	"github.com/gtsteffaniak/filebrowser/backend/internal/database/users"
+	"github.com/gtsteffaniak/filebrowser/backend/internal/state"
 	"github.com/gtsteffaniak/filebrowser/backend/internal/usersidebar"
 	"github.com/gtsteffaniak/filebrowser/backend/pkg/settings"
 	"github.com/gtsteffaniak/go-logger/logger"
@@ -38,10 +39,10 @@ func checkMigrationNeeded() bool {
 
 // validateDatabasePaths enforces database path rules before opening or creating SQLite:
 //  1. On a fresh install, fail if server.database.path is database.db or an unrenamed
-//     legacy BoltDB file (database.db) is present in the working directory.
-//  2. On a fresh install with server.database.migrateFrom set, fail if the legacy BoltDB file is missing
+//     legacy database file (database.db) is present in the working directory.
+//  2. On a fresh install with server.database.migrateFrom set, fail if the legacy database file is missing
 //     or empty.
-//  3. When SQLite already exists and server.database.migrateFrom is set, fail if the legacy BoltDB file
+//  3. When SQLite already exists and server.database.migrateFrom is set, fail if the legacy database file
 //     is missing or empty.
 //
 // Otherwise the existing SQLite database is used, or a new one is created on first open.
@@ -61,7 +62,8 @@ func validateDatabasePaths() error {
 		if _, err := os.Stat("database.db"); err == nil {
 			return migrationErrf(
 				`legacy database file found in the working directory. ` +
-					`Rename it to database.db.old, set server.database.migrateFrom to "database.db.old".`,
+					`Rename it to database.db.old, set server.database.migrateFrom to "database.db.old" ` +
+					`or use migrateFrom: "default".`,
 			)
 		}
 		if boltPath != "" {
@@ -95,7 +97,7 @@ func legacyBoltDatabaseError(boltPath, sqlitePath string, freshInstall bool) err
 		}
 		return migrationErrf(
 			`server.database.migrateFrom is %q but cannot be read: %v. `+
-				`Check file permissions or restore your backed-up BoltDB file.`,
+				`Check file permissions or restore your backed-up database file.`,
 			boltPath, err,
 		)
 	}
@@ -103,7 +105,7 @@ func legacyBoltDatabaseError(boltPath, sqlitePath string, freshInstall bool) err
 		if freshInstall {
 			return migrationErrf(
 				`server.database.migrateFrom is %q but that file is empty, and no SQLite database exists at server.database.path (%q). `+
-					`Restore your backed-up BoltDB file or fix the migrateFrom path.`,
+					`Restore your backed-up database file or fix the migrateFrom path.`,
 				boltPath, sqlitePath,
 			)
 		}
@@ -132,18 +134,18 @@ func migrateFromBoltToSQLite() error {
 	newDBPath := settings.Config.Server.DatabaseV2.Path
 
 	logger.Info("========================================")
-	logger.Info("Starting migration from BoltDB to SQLite")
+	logger.Info("Starting migration from legacy database")
 	logger.Info("========================================")
 	// Open old BoltDB (read-only)
-	logger.Info("Opening old BoltDB...")
+	logger.Info("Opening old database...")
 	oldDB, err := storm.Open(oldDBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open old database: %w", err)
 	}
 	logger.Info("✓ Old database opened")
 
-	// Initialize new SQLite database
-	logger.Info("Initializing new SQLite database...")
+	// Initialize new database
+	logger.Info("Initializing new database...")
 	sqlStore, _, err := sqldb.NewSQLStoreWithOptions(newDBPath, sqldb.NewSQLStoreOpts{SkipQuickSetup: true})
 	if err != nil {
 		oldDB.Close()
@@ -172,6 +174,9 @@ func migrateFromBoltToSQLite() error {
 	logger.Info("Migrating users...")
 	if err := migrateUsers(oldDB, sqlStore); err != nil {
 		return fmt.Errorf("failed to migrate users: %w", err)
+	}
+	if err := state.EnsureNoAuthAdminUserAfterMigration(sqlStore); err != nil {
+		return fmt.Errorf("failed to configure noauth admin user: %w", err)
 	}
 
 	// Migrate shares

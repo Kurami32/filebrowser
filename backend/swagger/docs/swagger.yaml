@@ -354,7 +354,7 @@ definitions:
         - $ref: '#/definitions/settings.ActivityConfig'
         description: activity audit logging configuration
       migrateFrom:
-        description: path to old BoltDB database file for migration (optional)
+        description: path to legacy database file for migration (optional)
         type: string
       path:
         description: path to SQLite database file
@@ -1271,6 +1271,8 @@ definitions:
         items:
           $ref: '#/definitions/users.SidebarLink'
         type: array
+      singleFileShare:
+        type: boolean
       source:
         description: source display name for API; backend path is Share.SourcePath
         type: string
@@ -1386,6 +1388,8 @@ definitions:
         items:
           $ref: '#/definitions/users.SidebarLink'
         type: array
+      singleFileShare:
+        type: boolean
       source:
         description: source display name for API; backend path is Share.SourcePath
         type: string
@@ -1489,6 +1493,8 @@ definitions:
         items:
           $ref: '#/definitions/users.SidebarLink'
         type: array
+      singleFileShare:
+        type: boolean
       source:
         description: source display name for API; backend path is Share.SourcePath
         type: string
@@ -2302,6 +2308,13 @@ definitions:
       toSource:
         description: 'Source name where contents will be extracted (optional; default:
           fromSource). Example: "restored"'
+        type: string
+    type: object
+  web.viewTokenResponse:
+    properties:
+      expiresAt:
+        type: integer
+      viewToken:
         type: string
     type: object
 info:
@@ -4200,6 +4213,42 @@ paths:
       summary: View content of a single non-media file inline
       tags:
       - Resources
+  /api/resources/view-token:
+    post:
+      consumes:
+      - application/json
+      description: Mints or extends a source-scoped view token for inline viewing.
+        Authenticated routes require a web session (not a named API token). Public
+        share routes accept anonymous users when the share allows it.
+      parameters:
+      - description: Source name or share hash
+        in: query
+        name: source
+        type: string
+      - description: Share hash (public share routes)
+        in: query
+        name: hash
+        type: string
+      - description: Existing view token to extend
+        in: query
+        name: viewToken
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.viewTokenResponse'
+        "403":
+          description: Missing permission or API token used
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh view token
+      tags:
+      - Resources
   /api/settings:
     get:
       consumes:
@@ -5589,6 +5638,42 @@ paths:
               type: string
             type: object
       summary: View a single non-media file from a public share inline
+      tags:
+      - Resources
+  /public/api/resources/view-token:
+    post:
+      consumes:
+      - application/json
+      description: Mints or extends a source-scoped view token for inline viewing.
+        Authenticated routes require a web session (not a named API token). Public
+        share routes accept anonymous users when the share allows it.
+      parameters:
+      - description: Source name or share hash
+        in: query
+        name: source
+        type: string
+      - description: Share hash (public share routes)
+        in: query
+        name: hash
+        type: string
+      - description: Existing view token to extend
+        in: query
+        name: viewToken
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/web.viewTokenResponse'
+        "403":
+          description: Missing permission or API token used
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh view token
       tags:
       - Resources
   /public/api/share/image:
