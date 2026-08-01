@@ -761,7 +761,13 @@
       "subscript": "Alsó index",
       "text": "Szöveg",
       "cell": "Cella",
-      "column": "Oszlop"
+      "column": "Oszlop",
+      "align": "Igazítás",
+      "alignRight": "Igazítás jobbra",
+      "alignLeft": "Igazítás balra",
+      "alignCenter": "Középre igazítás",
+      "justify": "Sorkizárt",
+      "fontColor": "Betűszín"
     }
   },
   "player": {
