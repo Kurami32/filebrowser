@@ -6386,6 +6386,10 @@ const docTemplate = `{
                 "preferEditorForMarkdown": {
                     "description": "prefer editor first for markdown files instead of the Markdown Viewer",
                     "type": "boolean"
+                },
+                "wrapEditorContent": {
+                    "description": "wrap long lines when editing files in the editor",
+                    "type": "boolean"
                 }
             }
         },
@@ -7314,6 +7318,10 @@ const docTemplate = `{
                 "viewMode": {
                     "description": "view mode to use: eg. normal, list, grid, or compact",
                     "type": "string"
+                },
+                "wrapEditorContent": {
+                    "description": "wrap long lines when editing files in the editor",
+                    "type": "boolean"
                 }
             }
         },
@@ -7731,6 +7739,10 @@ const docTemplate = `{
                 "viewMode": {
                     "description": "view mode to use: eg. normal, list, grid, or compact",
                     "type": "string"
+                },
+                "wrapEditorContent": {
+                    "description": "wrap long lines when editing files in the editor",
+                    "type": "boolean"
                 }
             }
         },

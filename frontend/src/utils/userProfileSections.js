@@ -66,6 +66,7 @@ export function sectionsFromFlatUser(user) {
       editorQuickSave: !!u.editorQuickSave,
       editButtonInHeader: !!u.editButtonInHeader,
       preferEditorForMarkdown: !!u.preferEditorForMarkdown,
+      wrapEditorContent: !!u.wrapEditorContent,
       debugOffice: !!u.debugOffice,
       disableViewingExt: u.disableViewingExt || "",
       disableOnlyOfficeExt: u.disableOnlyOfficeExt || "",
@@ -146,6 +147,7 @@ export function applySectionsToFlatUser(user, sections) {
   user.editorQuickSave = !!fileViewer.editorQuickSave;
   user.editButtonInHeader = !!fileViewer.editButtonInHeader;
   user.preferEditorForMarkdown = !!fileViewer.preferEditorForMarkdown;
+  user.wrapEditorContent = !!fileViewer.wrapEditorContent;
   user.debugOffice = !!fileViewer.debugOffice;
   user.disableViewingExt = fileViewer.disableViewingExt || "";
   user.disableOnlyOfficeExt = fileViewer.disableOnlyOfficeExt || "";
