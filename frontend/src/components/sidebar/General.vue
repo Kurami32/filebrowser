@@ -100,7 +100,8 @@ export default {
       if (getters.isShare()) {
         return state.shareInfo?.allowCreate === true
       }
-      return state.user?.permissions?.create || state.user?.permissions?.share || state.user?.permissions?.admin;
+      const global = getters.globalPermissions();
+      return getters.sourcePermissions().create || global.share || global.admin;
     },
     shareInfo: () => state.shareInfo,
     disableQuickToggles: () => state.user?.disableQuickToggles,
@@ -191,14 +192,13 @@ export default {
       let sharePath;
 
       if (isShare && state.shareInfo?.hash) {
-        const shareBase = `/public/share/${state.shareInfo.hash}`;
+        const shareBase = `${globalVars.baseURL}public/share/${state.shareInfo.hash}`;
         const subPath = state.req?.path && state.req.path !== '/'
           ? url.removeLeadingSlash(state.req.path)
           : '';
         sharePath = subPath ? `${shareBase}/${url.encodedPath(subPath)}` : shareBase;
       }
-      await auth.logout();
-      window.location.href = sharePath || '/login';
+      await auth.logout(sharePath);
     },
     beforeEnter(el) {
       el.style.maxHeight = '0';

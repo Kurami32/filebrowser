@@ -355,15 +355,15 @@ export const getters = {
         const preferEditor = state.user.preferEditorForMarkdown;
         const isMarkdown = state.req.type === 'text/markdown' || state.req.type === 'text/x-markdown';
 
-        const canEdit = getters.permissions().modify || (getters.isShare() && state.shareInfo?.allowEdit);
+        const canEdit = getters.sourcePermissions().modify || (getters.isShare() && state.shareInfo?.allowEdit);
         if (isMarkdown && state.editor.markdownSplitView && !state.isMobile && canEdit) {
           return 'editor';
         }
         switch (hash) {
-          case '#edit': return 'editor';
+          case '#edit': return canEdit ? 'editor' : 'markdownViewer';
           case '#preview': return 'markdownViewer';
         }
-        if (isMarkdown && preferEditor) return 'editor';
+        if (isMarkdown && preferEditor && canEdit) return 'editor';
         return 'markdownViewer';
       }
 
@@ -466,7 +466,7 @@ export const getters = {
         return true
       }
     } else {
-      if (!getters.permissions().view) {
+      if (!getters.sourcePermissions().view) {
         return true
       }
     }
@@ -608,7 +608,7 @@ export const getters = {
   canSplitView: () => {
     if (state.isMobile) return false;
     if (!state.req || !('content' in state.req)) return false;
-    const canEdit = getters.permissions().modify || (getters.isShare() && state.shareInfo?.allowEdit);
+    const canEdit = getters.sourcePermissions().modify || (getters.isShare() && state.shareInfo?.allowEdit);
     if (!canEdit) return false;
     return state.req.type === 'text/markdown' || state.req.type === 'text/x-markdown';
   },
@@ -623,24 +623,37 @@ export const getters = {
     const isAdvancedSearchRoute = (state.route.path || "").startsWith("/tools/advancedSearch");
     return getters.currentView() === "listingView" || isAdvancedSearchRoute;
   },
-  permissions: (source) => {
+  globalPermissions: () => {
     if (getters.isShare()) {
       return {
         share: false,
-        view: !state.shareInfo?.disableFileViewer,
-        modify: state.shareInfo?.allowModify,
-        create: state.shareInfo?.allowCreate,
-        delete: state.shareInfo?.allowDelete,
-        download: !state.shareInfo?.disableDownload,
         admin: false,
         api: false,
         realtime: false,
         archive: false,
       };
     }
+    const globalPerms = state.user?.permissions ?? {};
+    return {
+      share: !!(globalPerms.share || globalPerms.admin),
+      admin: !!globalPerms.admin,
+      api: !!globalPerms.api,
+      realtime: !!globalPerms.realtime,
+      archive: !!globalPerms.archive,
+    };
+  },
+  sourcePermissions: (source) => {
+    if (getters.isShare()) {
+      return {
+        view: !state.shareInfo?.disableFileViewer,
+        modify: !!state.shareInfo?.allowModify,
+        create: !!state.shareInfo?.allowCreate,
+        delete: !!state.shareInfo?.allowDelete,
+        download: !state.shareInfo?.disableDownload,
+      };
+    }
     const activeSource =
       source ?? state.req?.source ?? state.sources?.current ?? "";
-    const globalPerms = state.user?.permissions ?? {};
     const denyFile = {
       view: false,
       download: false,
@@ -648,25 +661,19 @@ export const getters = {
       create: false,
       delete: false,
     };
-    const filePerms = (() => {
-      if (!activeSource || !Array.isArray(state.user?.scopes)) {
-        return denyFile;
-      }
-      const scopeEntry = state.user.scopes.find((entry) => entry?.name === activeSource);
-      return scopeEntry?.permissions ?? denyFile;
-    })();
-    return {
-      share: !!(globalPerms.share || globalPerms.admin),
-      admin: globalPerms.admin,
-      api: globalPerms.api,
-      realtime: globalPerms.realtime,
-      archive: globalPerms.archive,
-      view: filePerms.view,
-      modify: filePerms.modify,
-      create: filePerms.create,
-      delete: filePerms.delete,
-      download: filePerms.download,
-    };
+    if (!activeSource || !Array.isArray(state.user?.scopes)) {
+      return denyFile;
+    }
+    const scopeEntry = state.user.scopes.find((entry) => entry?.name === activeSource);
+    return scopeEntry?.permissions ?? denyFile;
+  },
+  /** Whether the current user may create files/folders in the given source (share-aware). */
+  canCreateInSource: (source) => {
+    if (getters.isShare()) {
+      return !!state.shareInfo?.allowCreate;
+    }
+    const activeSource = source ?? state.req?.source ?? state.sources?.current ?? "";
+    return !!getters.sourcePermissions(activeSource)?.create;
   },
   apiTokenPermissionCaps: () => {
     const globalPerms = state.user?.permissions ?? {};

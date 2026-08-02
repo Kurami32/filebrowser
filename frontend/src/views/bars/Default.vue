@@ -110,7 +110,7 @@ export default {
       return state.req.name;
     },
     showQuickSave() {
-      if (getters.currentView() !== "editor" || !getters.permissions().modify) {
+      if (getters.currentView() !== "editor" || !getters.sourcePermissions().modify) {
         return false;
       }
       return state.user.editorQuickSave;
@@ -159,7 +159,7 @@ export default {
     },
     showSplitViewToggle() {
       return getters.canSplitView() && getters.isEditorOrMarkdownView() &&
-        (this.isSplitViewActive || getters.permissions().modify);
+        (this.isSplitViewActive || getters.sourcePermissions().modify);
     },
     splitViewActionLabel() {
       return this.isSplitViewActive
@@ -170,17 +170,18 @@ export default {
       if (this.isSplitViewActive) return false;
       if (!state.user?.editButtonInHeader) return false;
       if (getters.currentView() === "editor") return false;
-      const allowEdit = getters.permissions().modify || (getters.isShare() && state.shareInfo?.allowEdit);
+      const allowEdit = getters.sourcePermissions().modify || (getters.isShare() && state.shareInfo?.allowEdit);
       return isRichTextPreviewMimeType(state.req.type) && allowEdit;
     },
     showPreviewButton() {
       if (this.isSplitViewActive) return false;
       if (!state.user?.editButtonInHeader) return false;
       if (getters.currentView() !== "editor") return false;
-      return isRichTextPreviewMimeType(state.req.type);
+      const allowEdit = getters.sourcePermissions().modify || (getters.isShare() && state.shareInfo?.allowEdit);
+      return isRichTextPreviewMimeType(state.req.type) && allowEdit;
     },
     showSave() {
-      return getters.currentView() === "editor" && getters.permissions().modify;
+      return getters.currentView() === "editor" && getters.sourcePermissions().modify;
     },
     showSearch() {
       return getters.isLoggedIn() && getters.currentView() === "listingView" && !getters.isShare();

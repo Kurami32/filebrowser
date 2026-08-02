@@ -78,7 +78,7 @@ export default {
   }),
   computed: {
     permissions() {
-      return getters.permissions();
+      return getters.sourcePermissions();
     },
     isDarkMode() {
       return getters.isDarkMode();
