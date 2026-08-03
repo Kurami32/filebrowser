@@ -56,7 +56,6 @@ type UserDefaultsFileViewerEnforcement struct {
 	PreferEditorForMarkdown bool `json:"preferEditorForMarkdown,omitempty"`
 	WrapEditorContent       bool `json:"wrapEditorContent,omitempty"`
 	DebugOffice             bool `json:"debugOffice,omitempty"`
-	DefaultMediaPlayer      bool `json:"defaultMediaPlayer,omitempty"`
 }
 
 type UserDefaultsSearchEnforcement struct {

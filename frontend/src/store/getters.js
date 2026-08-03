@@ -1,4 +1,4 @@
-import * as i18n from '@/i18n';
+import { detectLocale } from '@/i18n';
 import { mutations, state } from '@/store';
 import { url } from '@/utils';
 import { globalVars, previewViews, tools } from '@/utils/constants';
@@ -172,7 +172,7 @@ export const getters = {
     if (state.user.locale === undefined || state.user.locale === null) {
       let savedLocale = localStorage.getItem('userLocale')
       if (!savedLocale) {
-        savedLocale = i18n.detectLocale()
+        savedLocale = detectLocale()
       }
       void mutations.updateCurrentUser({ locale: savedLocale })
     }
@@ -497,7 +497,7 @@ export const getters = {
     return {
       id: 0,
       username: "anonymous",
-      locale: i18n.detectLocale(),
+      locale: detectLocale(),
       sorting: {
         by: "name",
         asc: true
@@ -699,8 +699,7 @@ export const getters = {
         models: state.user?.preview?.models ?? true,
         motionVideoPreview: state.user?.preview?.motionVideoPreview ?? false,
         disableHideSidebar: state.user?.preview?.disableHideSidebar ?? false,
-        autoplayMedia: state.user?.preview?.autoplayMedia ?? false,
-        defaultMediaPlayer: false,
+        autoplayMedia: state.user?.preview?.autoplayMedia ?? true,
         showHidden: state.shareInfo?.showHidden !== undefined ? state.shareInfo?.showHidden : false,
       };
     }
@@ -715,8 +714,7 @@ export const getters = {
       models: state.user?.preview?.models ?? true,
       motionVideoPreview: state.user?.preview?.motionVideoPreview ?? false,
       disableHideSidebar: state.user?.preview?.disableHideSidebar ?? false,
-      autoplayMedia: state.user?.preview?.autoplayMedia ?? false,
-      defaultMediaPlayer: state.user?.preview?.defaultMediaPlayer ?? false,
+      autoplayMedia: state.user?.preview?.autoplayMedia ?? true,
       showHidden: false, // Backend handles this now, but kept for API compatibility
     };
   }

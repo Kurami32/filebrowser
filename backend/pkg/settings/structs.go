@@ -381,7 +381,6 @@ type UserDefaultsFileViewer struct {
 	PreferEditorForMarkdown bool   `json:"preferEditorForMarkdown"` // prefer editor first for markdown files instead of the Markdown Viewer
 	WrapEditorContent       bool   `json:"wrapEditorContent"`       // wrap long lines when editing files in the editor
 	DebugOffice             bool   `json:"debugOffice"`             // debug onlyoffice editor
-	DefaultMediaPlayer      bool   `json:"defaultMediaPlayer"`      // disable the styled feature-rich media player for browser default
 }
 
 // UserDefaultsSearch holds search-related settings
