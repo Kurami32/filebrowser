@@ -60,6 +60,15 @@ func applyEnforcedSourcePermissionFlag(perms *users.SourceFilePermissions, flag 
 	}
 }
 
+func setSourcePermissionFlag(perms *users.SourceFilePermissions, flag string, value bool) {
+	for _, f := range sourcePermissionFields {
+		if f.name == flag {
+			*f.field(perms) = value
+			return
+		}
+	}
+}
+
 // MergeSourceEnforcedPatchJSON merges a partial JSON patch into base source permission enforcement.
 func MergeSourceEnforcedPatchJSON(base SourceFilePermissionsEnforcement, patchJSON []byte) (SourceFilePermissionsEnforcement, error) {
 	baseBytes, err := json.Marshal(base)
@@ -152,13 +161,6 @@ func ValidateSelfUserUpdateScopesNotEnforced(which []string, enforced SourceFile
 	}
 	if len(EnforcedSourcePermissionFlags(enforced)) == 0 {
 		return nil
-	}
-	updateAll := len(which) == 0
-	if !updateAll && len(which) == 1 && strings.EqualFold(strings.TrimSpace(which[0]), "all") {
-		updateAll = true
-	}
-	if updateAll {
-		return ErrEnforcedUserField{Path: "scopes"}
 	}
 	for _, field := range which {
 		f := strings.TrimSpace(field)
