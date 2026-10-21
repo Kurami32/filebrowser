@@ -175,7 +175,16 @@ export const getters = {
   },
   /** Sort used by nextPrevious and quick jump */
   navigationSorting: () => {
-    return state.navigation.sorting || getters.sorting();
+    const searchSorting = getters.searchNavigationItems(state.req) ? state.searchResults?.sorting : undefined;
+    return state.navigation.sorting || searchSorting || getters.sorting();
+  },
+  /** Last search results to navigate when the item was opened from a search */
+  searchNavigationItems: (item: Partial<FileListItem>) => {
+    const items = state.searchResults?.items;
+    if (!state.previousHistoryItem?.returnTo || !items?.length) {
+      return null;
+    }
+    return items.some((i) => i.source === item.source && i.path === item.path) ? items : null;
   },
   /** Sort config for destination picker dialogs (copy/move/archive), independent of the main listing sort. */
   pickerSorting: () => {

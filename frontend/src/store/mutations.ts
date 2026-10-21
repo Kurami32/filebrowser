@@ -1192,7 +1192,12 @@ export const mutations = {
     }
     emitStateChanged();
   },
-  setupNavigation: ({ listing, currentItem, directoryPath }: { listing: unknown; currentItem: Partial<FileListItem>; directoryPath: string }) => {
+  setupNavigation: ({ listing, currentItem, directoryPath, useItemPaths = false }: { listing: unknown; currentItem: Partial<FileListItem>; directoryPath: string; useItemPaths?: boolean }) => {
+    const searchItems = getters.searchNavigationItems(currentItem);
+    if (searchItems) {
+      listing = searchItems;
+      useItemPaths = true;
+    }
     // Cancel any pending auto-hide from a previous setupNavigation; the raw
     // setTimeout used to leak and could fire setNavigationShow(false) right
     // after opening a new image (nextPrevious flicker).
@@ -1216,8 +1221,13 @@ export const mutations = {
     const items = getSortedNavigationItems(listing as Partial<FileListItem>[], sorting.by, sorting.asc);
 
     // Find current item index in the listing
+    const trimSlash = (p?: string) => (p || "").replace(/\/+$/, "");
     for (let i = 0; i < items.length; i++) {
-      if (items.at(i)?.name === currentItem.name) {
+      const candidate = items.at(i);
+      const isCurrent = useItemPaths
+        ? candidate?.source === currentItem.source && trimSlash(candidate?.path) === trimSlash(currentItem.path)
+        : candidate?.name === currentItem.name;
+      if (isCurrent) {
         state.navigation.currentIndex = i;
         break;
       }
@@ -1232,8 +1242,9 @@ export const mutations = {
     for (let i = state.navigation.currentIndex - 1; i >= 0; i--) {
       const item = items.at(i);
       if (!item || item.type === 'directory') continue;
-
-      item.path = url.joinPath(directoryPath, item.name);
+      if (!useItemPaths) {
+        item.path = url.joinPath(directoryPath, item.name);
+      }
       state.navigation.previousItem = item;
       state.navigation.previousLink = url.buildItemUrl(item.source, item.path);
 
@@ -1250,8 +1261,9 @@ export const mutations = {
     for (let i = state.navigation.currentIndex + 1; i < items.length; i++) {
       const item = items.at(i);
       if (!item || item.type === 'directory') continue;
-
-      item.path = url.joinPath(directoryPath, item.name);
+      if (!useItemPaths) {
+        item.path = url.joinPath(directoryPath, item.name);
+      }
       state.navigation.nextItem = item;
       state.navigation.nextLink = url.buildItemUrl(item.source, item.path);
 
