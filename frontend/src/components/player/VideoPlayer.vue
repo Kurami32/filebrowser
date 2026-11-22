@@ -420,6 +420,10 @@ const {
   onPlaybackState: updateMediaSessionPlaybackState,
   destroy,
   beforeStopMedia: clearAttachVideoStreamWait,
+  onReleaseFile: () => {
+    teardownTranscodePlayback({ stopSession: true });
+    disarmResumeOnNextGesture();
+  },
 });
 const { attachKeyboard, detachKeyboard } = useMediaKeyboard({
   player,

@@ -69,6 +69,12 @@ export function resolveMountedFileKey(source?: string, path?: string): MountedFi
   };
 }
 
+/** Identity of a file for swap detection (source + path). */
+export function fileKey(source?: string, path?: string): string {
+  const file = resolveMountedFileKey(source, path);
+  return `${file.source}|${file.path}`;
+}
+
 const PLYR_CONTROLS = [
   "play-large",
   "rewind",
@@ -101,6 +107,8 @@ interface MediaPlayerOptions {
   destroy: () => void;
   /** Runs before an element is stopped, e.g. to cancel a pending stream attach. */
   beforeStopMedia?: () => void;
+  /** Runs after the element is stopped by `releaseFile`, e.g. to end a transcode session. */
+  onReleaseFile?: () => void;
 }
 
 /** Creates, wires, stops and destroys Plyr , and ends/advances playback. */
@@ -108,6 +116,7 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
   const { player } = options;
   const { t } = useI18n();
   let nativePlay: NativePlay | null = null;
+  let releasedFor: MountedFileKey | null = null;
 
   const lifecycle: {
     mountedFile: MountedFileKey | null;
@@ -271,6 +280,29 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     }
   }
 
+  /** Stops the current file and keeps the instance alive; the playback rate survives the `load()`. */
+  function releaseFile(): void {
+    const media = getActiveMediaElement();
+    if (media) media.defaultPlaybackRate = media.playbackRate;
+    stopMediaElement(media);
+    options.onReleaseFile?.();
+    releasedFor = lifecycle.mountedFile;
+  }
+
+  /** Marks the file the instance now plays, for the route-leave check. */
+  function setMountedFile(source?: string, path?: string): void {
+    lifecycle.mountedFile = resolveMountedFileKey(source, path);
+  }
+
+  /** Re-applies the rate kept by `releaseFile`; call after attaching the next source. */
+  function reapplyPlaybackRate(): void {
+    const media = getActiveMediaElement();
+    if (!media) return;
+    const rate = media.defaultPlaybackRate || 1;
+    if (player.value) player.value.speed = rate;
+    else media.playbackRate = rate;
+  }
+
   /** Removes listeners, stops the element and destroys the instance. No-op without an instance. */
   function destroyPlayer(media: HTMLMediaElement | null): void {
     const current = player.value;
@@ -316,7 +348,13 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     ) {
       return;
     }
-    options.destroy();
+    if (releasedFor && releasedFor === mounted) {
+      return;
+    }
+    if (options.kind === "video" && state.navigation.isTransitioning) {
+      rememberFullscreenForTransition();
+    }
+    releaseFile();
   }
 
   function togglePlayPause(): void {
@@ -369,6 +407,9 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     onPlayerEvent,
     getActiveMediaElement,
     stopMediaElement,
+    releaseFile,
+    setMountedFile,
+    reapplyPlaybackRate,
     rememberFullscreenForTransition,
     resumeFullscreenAfterNavigation,
     destroyPlayer,
