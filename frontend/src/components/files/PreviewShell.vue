@@ -1,9 +1,9 @@
 <template>
   <div id="previewer">
-    <div v-if="isTransitioning" class="transition-loading">
+    <div v-if="showTransitionOverlay" class="transition-loading">
       <LoadingSpinner size="medium" />
     </div>
-    <div class="preview" :class="[{ transitioning: isTransitioning }, previewClass]">
+    <div class="preview" :class="[{ transitioning: showTransitionOverlay }, previewClass]">
       <slot />
     </div>
   </div>
@@ -14,10 +14,17 @@ import { computed } from "vue";
 import LoadingSpinner from "@/components/LoadingSpinner.vue";
 import { state } from "@/store/index.ts";
 
-defineProps<{ previewClass?: Record<string, boolean> }>();
+const props = withDefaults(
+  defineProps<{
+    previewClass?: Record<string, boolean>;
+    /** Covers and disables the content while navigating; players keep it off and show their own spinner. */
+    transitionOverlay?: boolean;
+  }>(),
+  { transitionOverlay: true },
+);
 defineSlots<{ default(): unknown }>();
 
-const isTransitioning = computed(() => state.navigation.isTransitioning);
+const showTransitionOverlay = computed(() => props.transitionOverlay && state.navigation.isTransitioning);
 </script>
 
 <style scoped>

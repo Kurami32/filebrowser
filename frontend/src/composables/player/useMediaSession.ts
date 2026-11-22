@@ -60,9 +60,9 @@ export function useMediaSession(player: Readonly<ShallowRef<Plyr | null>>) {
     }
   }
 
-  function setupMediaSession(info: MediaSessionInfo): void {
-    if (!("mediaSession" in navigator) || !player.value) return;
-    ownerId = ++mediaSessionOwner;
+  /** Per-file part: the title, artist, album and artwork shown by the browser. */
+  function updateMediaSessionMetadata(info: MediaSessionInfo): void {
+    if (!("mediaSession" in navigator) || !owns()) return;
     // Fresh fallback URL with a timestamp to prevent caching issues
     const fallbackIcon: string = globalVars.loginIcon;
     const timestamp = Date.now();
@@ -75,6 +75,13 @@ export function useMediaSession(player: Readonly<ShallowRef<Plyr | null>>) {
       album: info.album,
       artwork: [{ src: info.artworkSrc || fallbackUrl }],
     });
+  }
+
+  /** One-time part (per player): takes the session over and registers the handlers, then sets the metadata. */
+  function setupMediaSession(info: MediaSessionInfo): void {
+    if (!("mediaSession" in navigator) || !player.value) return;
+    ownerId = ++mediaSessionOwner;
+    updateMediaSessionMetadata(info);
     const actionHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
       ["play", () => player.value?.play()],
       ["pause", () => player.value?.pause()],
@@ -127,6 +134,7 @@ export function useMediaSession(player: Readonly<ShallowRef<Plyr | null>>) {
 
   return {
     setupMediaSession,
+    updateMediaSessionMetadata,
     updateMediaSessionNavHandlers,
     updateMediaSessionPlaybackState,
     clearMediaSession,
