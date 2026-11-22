@@ -51,7 +51,7 @@
           @loadedmetadata="onVideoLoadedMetadata"
           playsinline
         >
-          <track kind="captions" v-for="(sub, index) in subtitlesList" :key="index" :src="sub.src"
+          <track kind="captions" v-for="sub in subtitlesList" :key="sub.src" :src="sub.src"
             :label="sub.name || subtitleTrackLabel(sub)" :srclang="sub.srclang || sub.language" />
         </video>
       </div>
@@ -173,6 +173,8 @@ interface LoadingIndicatorHandle {
 
 const props = withDefaults(
   defineProps<{
+    /** Identifies the file; a new key swaps the file on the same player. */
+    fileKey?: string;
     raw: string;
     req: VideoFile;
     subtitlesList?: SubtitleTrack[];
@@ -230,8 +232,13 @@ const { applyCaptionSizeClass, syncCaptionSizeSettingsVisibility } = useCaptionS
   player,
   isVisible: () => props.subtitlesList.length > 0,
 });
-const { setupMediaSession, updateMediaSessionNavHandlers, updateMediaSessionPlaybackState, clearMediaSession } =
-  useMediaSession(player);
+const {
+  setupMediaSession,
+  updateMediaSessionMetadata,
+  updateMediaSessionNavHandlers,
+  updateMediaSessionPlaybackState,
+  clearMediaSession,
+} = useMediaSession(player);
 const gestures = useGestureState();
 const queue = usePlaybackQueue({
   getReq: () => props.req,
@@ -411,6 +418,8 @@ const {
   rememberFullscreenForTransition,
   resumeFullscreenAfterNavigation,
   setMountedFile,
+  releaseFile,
+  reapplyPlaybackRate,
   destroyPlayer,
 } = useMediaPlayer({
   kind: "video",
@@ -488,19 +497,6 @@ watch(
   () => state.playbackQueue.isPlaying || false,
   (isPlaying) => syncOverlaidHintPlayback(isPlaying),
 );
-watch(() => props.req.path, resetFilePlaybackState);
-watch(
-  () => props.req.source,
-  (newSource, oldSource) => {
-    if (!newSource || newSource === oldSource) {
-      return;
-    }
-    resetFilePlaybackState();
-    teardownPlayer();
-    lifecycle.tornDown = false;
-    void initializePlayer();
-  },
-);
 watch(
   () => props.subtitlesList,
   async (newSubs, oldSubs) => {
@@ -509,24 +505,21 @@ watch(
     if (gained || lost) {
       captionSizeMenuInitialized = false;
     }
+    if (!player.value) {
+      return; // the committed subtitles are in place when the player is created
+    }
+    await nextTick();
+    if (!player.value) {
+      return;
+    }
     if (gained) {
-      if (!player.value) {
-        await nextTick();
-        void initializePlayer();
-      } else {
-        await nextTick();
-        applyCustomSettings(player.value);
-        syncCaptionSizeSettingsVisibility();
-        applyCaptionSizeClass();
-      }
-    } else if (player.value) {
-      await nextTick();
+      applyCustomSettings(player.value);
+      syncCaptionSizeSettingsVisibility();
+      applyCaptionSizeClass();
+    } else {
       syncCaptionSizeSettingsVisibility();
       captionSizeMenuInitialized = false;
       applyCustomSettings(player.value);
-    } else if (newSubs !== oldSubs && (props.req?.subtitles?.length ?? 0) > 0) {
-      await nextTick();
-      void initializePlayer();
     }
   },
   { deep: true },
@@ -572,7 +565,7 @@ function onPageHide(event: PageTransitionEvent): void {
 
 /**
  * Stops playback and releases the player, listeners, transcode session and album art.
- * The transcode controller stays usable, so the player can be created again (source change, offer accepted).
+ * The transcode controller stays usable, so the player can be created again (offer accepted, or the next file after an offer).
  */
 function teardownPlayer(): void {
   if (lifecycle.tornDown) {
@@ -640,7 +633,7 @@ async function remountPlayer(): Promise<void> {
   lifecycle.tornDown = false;
   setMountedFile(props.req?.source, props.req?.path);
   loadMediaMetadata();
-  await preparePlayerMount();
+  void initializePlayer();
 }
 
 async function onStartTranscodeClick(): Promise<void> {
@@ -694,19 +687,6 @@ function ensurePlaybackModeApplied(): void {
   }
 }
 
-async function preparePlayerMount(): Promise<void> {
-  // For videos with subtitle metadata, wait for subtitles to load before initializing Plyr
-  // This prevents Plyr from trying to access tracks before they have valid blob URLs
-  const hasSubtitleMetadata = (props.req?.subtitles?.length ?? 0) > 0;
-  const subtitlesNotLoaded = props.subtitlesList.length === 0;
-
-  if (hasSubtitleMetadata && subtitlesNotLoaded) {
-    // Wait for subtitles to be loaded (watcher will call initializePlayer)
-    return;
-  }
-  void initializePlayer();
-}
-
 async function initializePlayer(): Promise<void> {
   if (!videoElement.value || player.value || lifecycle.tornDown) {
     return;
@@ -723,14 +703,18 @@ function canContinueMount(): boolean {
   return Boolean(videoElement.value) && !lifecycle.tornDown && !player.value;
 }
 
+/** Bumped by every file swap; async work started for an older file compares it and stops. */
+let swapGeneration = 0;
+
 async function mountPlayer(): Promise<void> {
   if (!canContinueMount() || lifecycle.mountInProgress) {
     return;
   }
   lifecycle.mountInProgress = true;
+  const generation = swapGeneration;
   try {
     ensureTranscodePlaybackController();
-    if (!(await prepareFile())) {
+    if (!(await prepareFile(() => generation === swapGeneration && canContinueMount()))) {
       return;
     }
     setupPlayerInstance();
@@ -741,23 +725,27 @@ async function mountPlayer(): Promise<void> {
     resumeFullscreenAfterNavigation();
   } finally {
     lifecycle.mountInProgress = false;
+    if (generation !== swapGeneration) {
+      // another file arrived while this mount was running for the previous one
+      void initializePlayer();
+    }
   }
 }
 
 /**
- * Per file, before the player is shown: the transcode mode from the route and the proactive offer.
- * Returns false when the mount must stop (the offer replaced the player, or the component went away).
+ * Per file, before the new source is attached: the transcode mode from the route and the proactive offer.
+ * Returns false when the caller must stop (`isCurrent` turned false, or the offer replaced the player).
  */
-async function prepareFile(): Promise<boolean> {
+async function prepareFile(isCurrent: () => boolean): Promise<boolean> {
   setMountedFile(props.req?.source, props.req?.path);
   initTranscodeModeFromRoute();
   await stripPlaybackTimeFromUrl();
-  if (!canContinueMount()) {
+  if (!isCurrent()) {
     return false;
   }
   if (!startRequested.value && !wantsTranscodePlayback.value && shouldProactivelyOfferTranscode.value) {
     await offerTranscodePlayback();
-    if (!canContinueMount()) {
+    if (!isCurrent()) {
       return false;
     }
   }
@@ -783,16 +771,63 @@ function setupPlayerInstance(): void {
   seekOnReleaseCleanup = enableSeekOnRelease(player.value);
 }
 
+function shouldStartTranscodeWithFile(): boolean {
+  return startRequested.value || (wantsTranscodePlayback.value && !shouldProactivelyOfferTranscode.value);
+}
+
 /** Per file, once the player exists: scrub preview, loading indicator and the transcode start. */
 async function startFile(): Promise<void> {
   setupScrubPreview();
   setupVideoLoadingIndicator();
-  if (startRequested.value || (wantsTranscodePlayback.value && !shouldProactivelyOfferTranscode.value)) {
+  if (shouldStartTranscodeWithFile()) {
     await startTranscodePlayback({
       autoplay: shouldAutoplay.value,
     });
   }
 }
+
+/**
+ * A new file on the same player (pre-flush: the per-file state is reset before the template computes the new `:src`).
+ * Without a player (after an offer, or an early failure) it creates one for the new file.
+ */
+async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
+  if (!newKey || newKey === oldKey || lifecycle.unmounted) {
+    return;
+  }
+  const generation = ++swapGeneration;
+  const isCurrent = () =>
+    generation === swapGeneration && !lifecycle.unmounted && !lifecycle.tornDown && Boolean(player.value);
+  releaseFile();
+  resetFilePlaybackState();
+  startRequested.value = false;
+  transcodeOffer.value = null;
+  videoPlaybackLoading.value = false;
+  lifecycle.tornDown = false;
+  loadMediaMetadata();
+  if (!player.value) {
+    await nextTick(); // the <video> is rendered again once the offer is gone
+    if (generation === swapGeneration) {
+      void initializePlayer();
+    }
+    return;
+  }
+  updateMediaSessionMetadata(mediaSessionInfo());
+  if (!(await prepareFile(isCurrent))) {
+    return;
+  }
+  await nextTick(); // the template sets the new src
+  if (!isCurrent()) {
+    return;
+  }
+  reapplyPlaybackRate();
+  const started = startFile();
+  if (shouldAutoplay.value && !shouldStartTranscodeWithFile()) {
+    void Promise.resolve(player.value?.play()).catch(() => {});
+  }
+  await started;
+}
+
+watch(() => props.fileKey, onFileSwap, { flush: "pre" });
 
 /** The title, artist, album and artwork of the current file for the browser's media session. */
 function mediaSessionInfo(): MediaSessionInfo {
@@ -871,10 +906,12 @@ function setupVideoLoadingIndicator(): void {
 }
 
 function setupScrubPreview(): void {
+  // The previous file's preview goes away even when the next file has none.
+  scrubPreviewCleanup?.();
+  scrubPreviewCleanup = null;
   if (!scrubPreviewEnabled.value || !player.value) {
     return;
   }
-  scrubPreviewCleanup?.();
   scrubPreviewCleanup = enableScrubPreview(player.value, {
     buildPreviewUrl: (atPercentage: number) => {
       const base = getters.isShare()
@@ -1098,7 +1135,7 @@ onMounted(async () => {
       offerCheckPending.value = false;
     }
   }
-  await preparePlayerMount();
+  void initializePlayer();
   if (lifecycle.unmounted) return;
   attachKeyboard();
   window.addEventListener("pagehide", onPageHide);

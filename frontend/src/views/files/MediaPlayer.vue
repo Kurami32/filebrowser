@@ -23,8 +23,9 @@
         @close-preview="exitPreviewFromImageGesture"
       />
       <VideoPlayer v-else-if="committed?.kind === 'video'"
-        :key="`video:${committed.key}`"
+        key="video"
         ref="videoRef"
+        :file-key="committed.key"
         :raw="committed.raw"
         :subtitlesList="committed.subtitles"
         :req="committed.req"
