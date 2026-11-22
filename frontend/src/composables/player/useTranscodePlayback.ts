@@ -1227,7 +1227,7 @@ export function useTranscodePlayback(options: UseTranscodePlaybackOptions) {
     }
   }
 
-  /** Back to the per-file defaults (new file, or the player is being re-created). */
+  /** Back to the per-file defaults (new file, or the offer was accepted). */
   function resetFileState(): void {
     cancelNativeResume?.();
     invalidateOfferRequest();

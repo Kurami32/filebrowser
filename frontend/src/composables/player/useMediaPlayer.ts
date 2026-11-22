@@ -11,10 +11,6 @@ import { buildPlaybackQueryPatch, playbackQueryChanged } from "@/utils/playbackQ
 import { getEndOfMediaAction, navigatePlaybackQueue } from "@/utils/playbackQueue.js";
 import { buildItemUrl, removeTrailingSlash } from "@/utils/url.js";
 
-/** Fullscreen state carried across a navigation between two media files (module-level on purpose). */
-let pendingFullscreenResume = false;
-let pendingResumeTimestamp = 0;
-
 /** Vue Router and buildItemUrl do not always encode the same characters, so route-leave checks compare both forms. */
 function decodePathSafely(path: string): string {
   try {
@@ -265,21 +261,6 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     }
   }
 
-  /** Remembers fullscreen so the next file opened right after this one can re-enter it. */
-  function rememberFullscreenForTransition(): void {
-    pendingFullscreenResume = player.value?.fullscreen?.active || false;
-    pendingResumeTimestamp = Date.now();
-  }
-
-  /** Re-enters fullscreen if the previous file left it pending (stale after 3s). */
-  function resumeFullscreenAfterNavigation(): void {
-    const isStale = Date.now() - pendingResumeTimestamp > 3000;
-    if (pendingFullscreenResume) {
-      pendingFullscreenResume = false;
-      if (!isStale) player.value?.fullscreen?.enter();
-    }
-  }
-
   /** Stops the current file and keeps the instance alive; the playback rate survives the `load()`. */
   function releaseFile(): void {
     const media = getActiveMediaElement();
@@ -351,9 +332,6 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     if (releasedFor && releasedFor === mounted) {
       return;
     }
-    if (options.kind === "video" && state.navigation.isTransitioning) {
-      rememberFullscreenForTransition();
-    }
     releaseFile();
   }
 
@@ -410,12 +388,7 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     releaseFile,
     setMountedFile,
     reapplyPlaybackRate,
-    rememberFullscreenForTransition,
-    resumeFullscreenAfterNavigation,
     destroyPlayer,
     stopIfRouteLeftThisFile,
-    togglePlayPause,
-    restartCurrentFile,
-    handleMediaEnd,
   };
 }

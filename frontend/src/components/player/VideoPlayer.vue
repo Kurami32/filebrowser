@@ -418,8 +418,6 @@ const {
   onPlayerEvent,
   getActiveMediaElement,
   stopMediaElement,
-  rememberFullscreenForTransition,
-  resumeFullscreenAfterNavigation,
   setMountedFile,
   releaseFile,
   reapplyPlaybackRate,
@@ -594,7 +592,6 @@ function teardownPlayer(): void {
   lifecycle.mountedFile = null;
   lockedNativeVideoSrc.value = null;
   const media = getActiveMediaElement();
-  const isTransition = state.navigation.isTransitioning;
 
   if (media) {
     stopMediaElement(media);
@@ -603,9 +600,6 @@ function teardownPlayer(): void {
   disarmResumeOnNextGesture();
 
   if (player.value) {
-    if (isTransition) {
-      rememberFullscreenForTransition();
-    }
     restoreNativePlay();
     teardownSwipeGestures();
     teardownDoubleTapSeek();
@@ -731,7 +725,6 @@ async function mountPlayer(): Promise<void> {
       return;
     }
     await startFile();
-    resumeFullscreenAfterNavigation();
   } finally {
     lifecycle.mountInProgress = false;
     if (generation !== swapGeneration) {
@@ -800,7 +793,7 @@ async function startFile(): Promise<void> {
 
 /**
  * A new file on the same player (pre-flush: the per-file state is reset before the template computes the new `:src`).
- * Without a player (after an offer, or an early failure) it creates one for the new file.
+ * Without a player (the first file's offer was showing, a destroy, or an early failure) it creates one for the new file.
  */
 async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
   if (!newKey || newKey === oldKey || lifecycle.unmounted) {
@@ -817,7 +810,7 @@ async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
   lifecycle.tornDown = false;
   loadMediaMetadata();
   if (!player.value) {
-    await nextTick(); // the <video> is rendered again once the offer is gone
+    await nextTick();
     if (generation === swapGeneration) {
       void initializePlayer();
     }

@@ -9,7 +9,6 @@ const hoisted = vi.hoisted(() => ({
   state: {
     route: { path: "/files/src/a.mp4" },
     sources: { current: "src" },
-    navigation: { isTransitioning: false },
     playbackQueue: { queue: [], currentIndex: -1, loop: "off", shouldTogglePlayPause: false },
   },
 }));
@@ -40,8 +39,7 @@ function makeMedia(): HTMLMediaElement {
 function setup(kind: "audio" | "video" = "video") {
   const media = makeMedia();
   media.setAttribute("src", "blob:a");
-  const fullscreen = { active: false, enter: vi.fn() };
-  const plyr = { speed: 1, fullscreen, destroy: vi.fn(), media } as unknown as Plyr;
+  const plyr = { speed: 1, destroy: vi.fn(), media } as unknown as Plyr;
   const player = shallowRef<Plyr | null>(plyr);
   const hooks = { destroy: vi.fn(), beforeStopMedia: vi.fn(), onReleaseFile: vi.fn() };
   const { result } = withSetup(() =>
@@ -55,7 +53,7 @@ function setup(kind: "audio" | "video" = "video") {
     }),
   );
   result.setMountedFile("src", "/a.mp4");
-  return { media, plyr, player, fullscreen, hooks, ...result };
+  return { media, plyr, player, hooks, ...result };
 }
 
 async function navigateTo(path: string) {
@@ -67,7 +65,6 @@ describe("useMediaPlayer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.route.path = "/files/src/a.mp4";
-    state.navigation.isTransitioning = false;
   });
 
   describe("releaseFile", () => {
@@ -169,26 +166,6 @@ describe("useMediaPlayer", () => {
       lifecycle.tornDown = true;
       await navigateTo("/files/src/");
       expect(hooks.onReleaseFile).not.toHaveBeenCalled();
-    });
-
-    it("remembers fullscreen for a video transition", async () => {
-      const first = setup("video");
-      first.fullscreen.active = true;
-      state.navigation.isTransitioning = true;
-      await navigateTo("/files/src/");
-      const next = setup("video");
-      next.resumeFullscreenAfterNavigation();
-      expect(next.fullscreen.enter).toHaveBeenCalledOnce();
-    });
-
-    it("does not remember fullscreen for audio or without a transition", async () => {
-      const audio = setup("audio");
-      audio.fullscreen.active = true;
-      state.navigation.isTransitioning = true;
-      await navigateTo("/files/src/");
-      const video = setup("video");
-      video.resumeFullscreenAfterNavigation();
-      expect(video.fullscreen.enter).not.toHaveBeenCalled();
     });
   });
 });
