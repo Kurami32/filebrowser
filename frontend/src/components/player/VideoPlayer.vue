@@ -647,6 +647,7 @@ async function onStartTranscodeClick(): Promise<void> {
 
 /** Starts playback from the gesture surface or the overlaid play button */
 function requestPlay(): void {
+  if (transcodeSwitchInProgress.value) return;
   if (formatNeedsTranscode.value && !isTranscodePlaybackMode.value && !transcodeActive.value) {
     void offerTranscodePlayback();
     return;
