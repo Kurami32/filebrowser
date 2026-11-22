@@ -283,7 +283,7 @@ export function navigatePlaybackQueue(direction) {
   });
 
   // Trigger navigation
-  mutations.setNavigationTransitioning(true);
+  // mutations.setNavigationTransitioning(true);
   url.goToItem(item.source || state.req.source, item.path, undefined, false, getters.isShare());
 
   return true;

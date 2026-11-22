@@ -545,7 +545,7 @@ export default {
         if (this.isMediaQueueMode) {
           navigatePlaybackQueue(-1);
         } else {
-          mutations.setNavigationTransitioning(true);
+          // mutations.setNavigationTransitioning(true);
           this.$router.replace({ path: state.navigation.previousLink });
         }
       }
@@ -564,7 +564,7 @@ export default {
         if (this.isMediaQueueMode) {
           navigatePlaybackQueue(1);
         } else {
-          mutations.setNavigationTransitioning(true);
+          // mutations.setNavigationTransitioning(true);
           this.$router.replace({ path: state.navigation.nextLink });
         }
       }

@@ -137,7 +137,7 @@ export function usePreviewNavigation(options: PreviewNavigationOptions = {}) {
       return;
     }
     if (state.navigation.previousLink) {
-      mutations.setNavigationTransitioning(true);
+      // mutations.setNavigationTransitioning(true);
       router.replace({ path: state.navigation.previousLink });
     }
   }
@@ -151,7 +151,7 @@ export function usePreviewNavigation(options: PreviewNavigationOptions = {}) {
       return;
     }
     if (state.navigation.nextLink) {
-      mutations.setNavigationTransitioning(true);
+      // mutations.setNavigationTransitioning(true);
       router.replace({ path: state.navigation.nextLink });
     }
   }
