@@ -197,4 +197,50 @@ describe("useTranscodePlayback", () => {
       expect(transcode.ensureTranscodePlaybackController()).not.toBe(first);
     });
   });
+
+  describe("per-file reset", () => {
+    it("clears the native attach state but keeps the controller between files", () => {
+      const { transcode } = setup();
+      const controller = transcode.ensureTranscodePlaybackController();
+      transcode.videoStreamAttached.value = true;
+      transcode.lockedNativeVideoSrc.value = "/raw/a.mp4#t=12";
+
+      transcode.resetFileState();
+
+      expect(transcode.videoStreamAttached.value).toBe(false);
+      expect(transcode.lockedNativeVideoSrc.value).toBeNull();
+      expect(transcode.ensureTranscodePlaybackController()).toBe(controller);
+      expect(controller.disposed).toBe(false);
+    });
+
+    it("lets the next file be offered again after the previous one was offered", async () => {
+      getSessions.mockResolvedValue({ enabled: true, canStart: true, sessions: [] });
+      const { transcode, hooks } = setup();
+      await transcode.offerTranscodePlayback();
+      await transcode.offerTranscodePlayback();
+      expect(getSessions).toHaveBeenCalledTimes(1);
+
+      transcode.resetFileState();
+      await transcode.offerTranscodePlayback();
+
+      expect(getSessions).toHaveBeenCalledTimes(2);
+      expect(hooks.onOfferShown).toHaveBeenCalledTimes(2);
+    });
+
+    it("decides the transcode mode again for each file", () => {
+      const { transcode } = setup({ transcode: "balanced" });
+      transcode.initTranscodeModeFromRoute();
+      expect(transcode.transcodeMode.value).toBe("native");
+
+      hoisted.needsTranscode.value = false;
+      transcode.resetFileState();
+      transcode.initTranscodeModeFromRoute();
+      expect(transcode.transcodeMode.value).toBe("balanced");
+
+      hoisted.needsTranscode.value = true;
+      transcode.resetFileState();
+      transcode.initTranscodeModeFromRoute();
+      expect(transcode.transcodeMode.value).toBe("native");
+    });
+  });
 });

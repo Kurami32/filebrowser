@@ -117,11 +117,10 @@ import { useMediaKeyboard } from "@/composables/player/useMediaKeyboard.ts";
 import {
   type PlayerEmits,
   type PlayerFile,
-  resolveMountedFileKey,
   stripPlaybackTimeFromUrl,
   useMediaPlayer,
 } from "@/composables/player/useMediaPlayer.ts";
-import { useMediaSession } from "@/composables/player/useMediaSession.ts";
+import { type MediaSessionInfo, useMediaSession } from "@/composables/player/useMediaSession.ts";
 import { usePlaybackQueue } from "@/composables/player/usePlaybackQueue.ts";
 import { useSwipeNavigationGestures } from "@/composables/player/useSwipeNavigationGestures.ts";
 import { useTranscodePlayback } from "@/composables/player/useTranscodePlayback.ts";
@@ -411,6 +410,7 @@ const {
   stopMediaElement,
   rememberFullscreenForTransition,
   resumeFullscreenAfterNavigation,
+  setMountedFile,
   destroyPlayer,
 } = useMediaPlayer({
   kind: "video",
@@ -466,10 +466,22 @@ function subtitleTrackLabel(sub: SubtitleTrack): string {
   return ext || sub?.name || "";
 }
 
+/** Plyr-specific: menu state that depends on the file; the next `applyCustomSettings` rebuilds it. */
+function resetFileMenuState(): void {
+  captionSizeMenuInitialized = false; // visibility follows the file's subtitles
+  transcodeMenuInitialized = false; // the selection follows the file's transcode mode
+}
+
 function resetFilePlaybackState(): void {
   resetFileState();
   hasStartedPlayback.value = false;
   resetOverlaidHints();
+  resetFileMenuState();
+  // HLS playback sets the container's aspect ratio from the stream; the next file starts without it.
+  const container = player.value?.elements?.container;
+  if (container) {
+    container.style.aspectRatio = "";
+  }
 }
 
 watch(
@@ -626,7 +638,7 @@ async function remountPlayer(): Promise<void> {
   await nextTick(); // the <video> element is rendered again
   resetFilePlaybackState();
   lifecycle.tornDown = false;
-  lifecycle.mountedFile = resolveMountedFileKey(props.req?.source, props.req?.path);
+  setMountedFile(props.req?.source, props.req?.path);
   loadMediaMetadata();
   await preparePlayerMount();
 }
@@ -706,58 +718,91 @@ async function initializePlayer(): Promise<void> {
   void mountPlayer();
 }
 
+/** True while a mount that is in progress still has a media element and no player. */
+function canContinueMount(): boolean {
+  return Boolean(videoElement.value) && !lifecycle.tornDown && !player.value;
+}
+
 async function mountPlayer(): Promise<void> {
-  if (!videoElement.value || player.value || lifecycle.mountInProgress || lifecycle.tornDown) {
+  if (!canContinueMount() || lifecycle.mountInProgress) {
     return;
   }
   lifecycle.mountInProgress = true;
   try {
     ensureTranscodePlaybackController();
-    lifecycle.mountedFile = resolveMountedFileKey(props.req?.source, props.req?.path);
-    initTranscodeModeFromRoute();
-    await stripPlaybackTimeFromUrl();
-    if (!videoElement.value || lifecycle.tornDown || player.value) {
+    if (!(await prepareFile())) {
       return;
     }
-    if (!startRequested.value && !wantsTranscodePlayback.value && shouldProactivelyOfferTranscode.value) {
-      await offerTranscodePlayback();
-      if (!videoElement.value || lifecycle.tornDown || player.value) {
-        return;
-      }
-    }
-    createPlayer(videoPlyrOptions.value);
+    setupPlayerInstance();
     if (!player.value) {
       return;
     }
-    if (!shouldAttachVideoStream.value) {
-      overridePlay((nativePlay) => {
-        if (!videoStreamAttached.value) {
-          void attachVideoStreamAndPlay();
-          return Promise.resolve();
-        }
-        return nativePlay();
-      });
-    }
-    setupMediaSession({
-      title: metadata.value?.title || fileName.value,
-      artist: metadata.value?.artist || globalVars.name || "Filebrowser Quantum",
-      album: metadata.value?.album || "",
-      // Embedded artwork (if any), otherwise the thumbnail/preview url.
-      artworkSrc: artworkUrl.value,
-    });
-    setupPlayerEvents();
-    seekOnReleaseCleanup = enableSeekOnRelease(player.value);
-    setupScrubPreview();
-    setupVideoLoadingIndicator();
-    if (startRequested.value || (wantsTranscodePlayback.value && !shouldProactivelyOfferTranscode.value)) {
-      await startTranscodePlayback({
-        autoplay: shouldAutoplay.value,
-      });
-    }
+    await startFile();
     resumeFullscreenAfterNavigation();
   } finally {
     lifecycle.mountInProgress = false;
   }
+}
+
+/**
+ * Per file, before the player is shown: the transcode mode from the route and the proactive offer.
+ * Returns false when the mount must stop (the offer replaced the player, or the component went away).
+ */
+async function prepareFile(): Promise<boolean> {
+  setMountedFile(props.req?.source, props.req?.path);
+  initTranscodeModeFromRoute();
+  await stripPlaybackTimeFromUrl();
+  if (!canContinueMount()) {
+    return false;
+  }
+  if (!startRequested.value && !wantsTranscodePlayback.value && shouldProactivelyOfferTranscode.value) {
+    await offerTranscodePlayback();
+    if (!canContinueMount()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Per instance, once: the player, the play override, media session handlers, events and gestures. */
+function setupPlayerInstance(): void {
+  createPlayer(videoPlyrOptions.value);
+  if (!player.value) {
+    return;
+  }
+  // Installed always: whether the stream is attached on play is decided per call, so it follows the current file.
+  overridePlay((nativePlay) => {
+    if (!shouldAttachVideoStream.value && !videoStreamAttached.value) {
+      void attachVideoStreamAndPlay();
+      return Promise.resolve();
+    }
+    return nativePlay();
+  });
+  setupMediaSession(mediaSessionInfo());
+  setupPlayerEvents();
+  seekOnReleaseCleanup = enableSeekOnRelease(player.value);
+}
+
+/** Per file, once the player exists: scrub preview, loading indicator and the transcode start. */
+async function startFile(): Promise<void> {
+  setupScrubPreview();
+  setupVideoLoadingIndicator();
+  if (startRequested.value || (wantsTranscodePlayback.value && !shouldProactivelyOfferTranscode.value)) {
+    await startTranscodePlayback({
+      autoplay: shouldAutoplay.value,
+    });
+  }
+}
+
+/** The title, artist, album and artwork of the current file for the browser's media session. */
+function mediaSessionInfo(): MediaSessionInfo {
+  return {
+    title: metadata.value?.title || fileName.value,
+    artist: metadata.value?.artist || globalVars.name || "Filebrowser Quantum",
+    album: metadata.value?.album || "",
+    // Embedded artwork (if any), otherwise the thumbnail/preview url.
+    artworkSrc: artworkUrl.value,
+  };
 }
 
 // --- Transcode ---
@@ -1042,7 +1087,7 @@ function applyCustomSettings(plyr: Plyr): void {
 onMounted(async () => {
   // Record the mounted file before any async prepare step so route-leave
   // detection works while Plyr is still waiting on subtitles/metadata.
-  lifecycle.mountedFile = resolveMountedFileKey(props.req?.source, props.req?.path);
+  setMountedFile(props.req?.source, props.req?.path);
   loadMediaMetadata();
   if (shouldProactivelyOfferTranscode.value) {
     // Decide before the player appears: an unsupported format gets the offer, not a blank player.
