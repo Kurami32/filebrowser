@@ -1134,7 +1134,7 @@ export function useTranscodePlayback(options: UseTranscodePlaybackOptions) {
     controller.teardownLocal({ stopSession, keepalive });
   }
 
-  /** Final release of the controller (component teardown, or an offer replacing the player). */
+  /** Final release of the controller (component teardown). */
   function disposeTranscodeController({ stopSession = true, keepalive = false } = {}): void {
     cancelNativeResume?.();
     invalidateOfferRequest();
@@ -1173,7 +1173,7 @@ export function useTranscodePlayback(options: UseTranscodePlaybackOptions) {
     if (getters.isShare()) {
       return;
     }
-    disposeTranscodeController({ stopSession: true });
+    teardownTranscodePlayback({ stopSession: true });
     const status = normalizeTranscodeSessionStatus(rawStatus, {
       source: getReq()?.source,
       path: getReq()?.path,

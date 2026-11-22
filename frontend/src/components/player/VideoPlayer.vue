@@ -1,6 +1,6 @@
 <template>
   <div class="media-player">
-    <!-- Native playback is not possible: offer transcoding instead of the player -->
+    <!-- Native playback is not possible: the offer takes the place of the player, which stays mounted but hidden -->
     <PreviewNotice
       v-if="transcodeOffer"
       icon="feedback"
@@ -27,12 +27,11 @@
         </button>
       </template>
     </PreviewNotice>
-    <template v-else>
     <div v-if="offerCheckPending" class="av-preview-loading">
       <LoadingSpinner size="medium" />
     </div>
     <div
-      v-show="!offerCheckPending"
+      v-show="!offerCheckPending && !transcodeOffer"
       class="video-player-container"
       :class="{
         'no-captions': !hasSubtitles,
@@ -80,14 +79,13 @@
     </div>
     <!-- Queue button (hidden in fullscreen) -->
     <FloatingActionButton
-      v-if="showQueueButton"
+      v-if="showQueueButton && !transcodeOffer"
       icon="queue_music"
       :badge="queueCount"
       group="media-controls"
       @press="showQueuePrompt"
       :label="t('player.QueueButtonHint')"
     />
-    </template>
   </div>
 </template>
 
@@ -314,9 +312,14 @@ const {
   onPlaybackStart: () => emit("playback-start"),
   ensurePlaybackModeApplied,
   onModeMenuChange: updateTranscodeModeMenuSelection,
-  // The offer replaces the player in the template, so release it right away.
-  onOfferShown: teardownPlayer,
+  // The offer hides the player but keeps it alive: only the media and the session are stopped.
+  onOfferShown,
 });
+/** The offer is on screen: stop the media and the HLS session, the instance stays for the next file or the accept. */
+function onOfferShown(): void {
+  releaseFile();
+  videoPlaybackLoading.value = false;
+}
 const transcodeMenuAvailable = computed(
   () => transcodeEnabled.value && getters.isLoggedIn() && !getters.isShare(),
 );
@@ -565,7 +568,7 @@ function onPageHide(event: PageTransitionEvent): void {
 
 /**
  * Stops playback and releases the player, listeners, transcode session and album art.
- * The transcode controller stays usable, so the player can be created again (offer accepted, or the next file after an offer).
+ * Only the final teardown (unmount, `destroy()`) uses it: the offer and the file swaps keep the player alive.
  */
 function teardownPlayer(): void {
   if (lifecycle.tornDown) {
@@ -626,20 +629,26 @@ function destroy(): void {
   disposeTranscodeController({ stopSession: true });
 }
 
-/** Creates the player again after the offer was accepted (the offer had released it) */
-async function remountPlayer(): Promise<void> {
-  await nextTick(); // the <video> element is rendered again
-  resetFilePlaybackState();
-  lifecycle.tornDown = false;
-  setMountedFile(props.req?.source, props.req?.path);
-  loadMediaMetadata();
-  void initializePlayer();
-}
-
+/**
+ * The offer's accept button. The player is still alive (the offer only stopped it), so HLS starts on it;
+ * a player that was never created (the offer came before the first mount) is created now.
+ */
 async function onStartTranscodeClick(): Promise<void> {
-  if (await startVideoTranscode()) {
-    await remountPlayer();
+  const generation = swapGeneration;
+  if (!(await startVideoTranscode())) {
+    return;
   }
+  if (generation !== swapGeneration || lifecycle.unmounted) {
+    // another file arrived while the check ran: the accept belonged to the previous one
+    startRequested.value = false;
+    return;
+  }
+  resetFilePlaybackState();
+  if (!player.value) {
+    void initializePlayer();
+    return;
+  }
+  await startFile();
 }
 
 /** Starts playback from the gesture surface or the overlaid play button */
@@ -734,7 +743,7 @@ async function mountPlayer(): Promise<void> {
 
 /**
  * Per file, before the new source is attached: the transcode mode from the route and the proactive offer.
- * Returns false when the caller must stop (`isCurrent` turned false, or the offer replaced the player).
+ * Returns false when the caller must stop (`isCurrent` turned false, or the offer is showing for this file).
  */
 async function prepareFile(isCurrent: () => boolean): Promise<boolean> {
   setMountedFile(props.req?.source, props.req?.path);
@@ -745,7 +754,7 @@ async function prepareFile(isCurrent: () => boolean): Promise<boolean> {
   }
   if (!startRequested.value && !wantsTranscodePlayback.value && shouldProactivelyOfferTranscode.value) {
     await offerTranscodePlayback();
-    if (!isCurrent()) {
+    if (!isCurrent() || transcodeOffer.value) {
       return false;
     }
   }
@@ -760,6 +769,9 @@ function setupPlayerInstance(): void {
   }
   // Installed always: whether the stream is attached on play is decided per call, so it follows the current file.
   overridePlay((nativePlay) => {
+    if (transcodeOffer.value) {
+      return Promise.resolve(); // the offer is showing: keys and media session buttons must not start the file
+    }
     if (!shouldAttachVideoStream.value && !videoStreamAttached.value) {
       void attachVideoStreamAndPlay();
       return Promise.resolve();
@@ -1135,7 +1147,9 @@ onMounted(async () => {
       offerCheckPending.value = false;
     }
   }
-  void initializePlayer();
+  if (!transcodeOffer.value) {
+    void initializePlayer();
+  }
   if (lifecycle.unmounted) return;
   attachKeyboard();
   window.addEventListener("pagehide", onPageHide);
@@ -1181,7 +1195,6 @@ defineExpose({ destroy });
   background: rgb(0 0 0 / 35%);
 }
 
-/* Transcode offer (shown instead of the player; layout comes from PreviewNotice). */
 .transcode-offer-message {
   margin: 1rem 0;
   text-align: center;

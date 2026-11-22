@@ -87,7 +87,8 @@ describe("usePreviewNavigation", () => {
   it("follows the folder neighbours outside queue mode", () => {
     const api = mountComposable();
     api.navigatePrevious();
-    expect(mutationsMock.setNavigationTransitioning).toHaveBeenCalledWith(true);
+    // setNavigationTransitioning is commented out for now (see usePreviewNavigation.ts)
+    // expect(mutationsMock.setNavigationTransitioning).toHaveBeenCalledWith(true);
     expect(routerMock.replace).toHaveBeenCalledWith({ path: "/prev" });
     api.navigateNext();
     expect(routerMock.replace).toHaveBeenLastCalledWith({ path: "/next" });

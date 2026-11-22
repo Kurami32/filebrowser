@@ -102,6 +102,15 @@ describe("useTranscodePlayback", () => {
       expect(getSessions).toHaveBeenCalledTimes(1);
     });
 
+    it("keeps the controller usable behind the offer, for the accept", async () => {
+      getSessions.mockResolvedValue({ enabled: true, canStart: true, sessions: [] });
+      const { transcode } = setup();
+      const controller = transcode.ensureTranscodePlaybackController();
+      await transcode.offerTranscodePlayback();
+      expect(transcode.transcodePlayback.value).toBe(controller);
+      expect(controller.disposed).toBe(false);
+    });
+
     it("shows the unsupported notice without asking for sessions when transcoding is off", async () => {
       hoisted.available.value = false;
       const { transcode } = setup();

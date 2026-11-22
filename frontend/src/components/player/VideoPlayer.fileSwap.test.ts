@@ -13,6 +13,8 @@ const hoisted = vi.hoisted(() => ({
   resetFileState: vi.fn(),
   initMode: vi.fn(),
   startTranscode: vi.fn(),
+  attachStream: vi.fn(),
+  acceptOffer: true,
   scrubCleanup: vi.fn(),
   scrub: vi.fn(),
   loadingCleanup: vi.fn(),
@@ -87,7 +89,9 @@ vi.mock("@/player/scrubPreview.js", () => ({
   },
 }));
 vi.mock("@/player/videoLoading.js", () => ({ enableVideoLoadingIndicator: () => hoisted.loadingCleanup }));
-vi.mock("@/components/files/PreviewNotice.vue", () => ({ default: { render: () => h("div", { class: "offer-notice" }) } }));
+vi.mock("@/components/files/PreviewNotice.vue", () => ({
+  default: { setup: (_: unknown, { slots }: { slots: { actions?: () => unknown } }) => () => h("div", { class: "offer-notice" }, slots.actions?.() as never) },
+}));
 vi.mock("@/components/LoadingSpinner.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/settings/FloatingActionButton.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/player/PlayerOverlays.vue", () => ({ default: { render: () => null } }));
@@ -168,6 +172,13 @@ vi.mock("@/composables/player/useTranscodePlayback.ts", async () => {
       const videoStreamAttached = ref(false);
       const lockedNativeVideoSrc = ref<string | null>(null);
       let offerId = 0;
+      const offerTranscodePlayback = async () => {
+        const id = ++offerId;
+        await hoisted.offerGate;
+        if (id !== offerId) return;
+        transcodeOffer.value = { mode: "offer", sessions: [] };
+        opts.onOfferShown();
+      };
       const needs = () => hoisted.needsTranscode.has(opts.getReq().path);
       const isTranscodePlaybackMode = computed(() => transcodeMode.value !== "native");
       const shouldAttachVideoStream = computed(
@@ -206,23 +217,22 @@ vi.mock("@/composables/player/useTranscodePlayback.ts", async () => {
           transcodeMode.value = hoisted.urlMode.get(opts.getReq().path) ?? "native";
         },
         ensureTranscodePlaybackController: vi.fn(),
-        offerTranscodePlayback: async () => {
-          const id = ++offerId;
-          await hoisted.offerGate;
-          if (id !== offerId) return;
-          transcodeOffer.value = { mode: "offer", sessions: [] };
-          opts.onOfferShown();
-        },
+        offerTranscodePlayback,
         startTranscodePlayback: hoisted.startTranscode,
         switchTranscodeMode: vi.fn(),
         teardownTranscodePlayback: hoisted.teardown,
         disposeTranscodeController: vi.fn(),
-        attachVideoStreamAndPlay: vi.fn(),
+        attachVideoStreamAndPlay: hoisted.attachStream,
         clearAttachVideoStreamWait: vi.fn(),
         disarmResumeOnNextGesture: vi.fn(),
-        startVideoTranscode: vi.fn(),
+        startVideoTranscode: async () => {
+          if (!hoisted.acceptOffer) return false;
+          transcodeOffer.value = null;
+          startRequested.value = true;
+          return true;
+        },
         onVideoLoadedMetadata: vi.fn(),
-        onVideoPlaybackError: vi.fn(),
+        onVideoPlaybackError: () => void offerTranscodePlayback(),
       };
     },
   };
@@ -277,6 +287,7 @@ describe("VideoPlayer file swap", () => {
     hoisted.needsTranscode.clear();
     hoisted.urlMode.clear();
     hoisted.offerGate = null;
+    hoisted.acceptOffer = true;
     hoisted.videoPreviews = false;
     unmounted = false;
     vi.clearAllMocks();
@@ -399,19 +410,89 @@ describe("VideoPlayer file swap", () => {
       expect(video().getAttribute("src")).toBe("/raw/b.mp4");
     });
 
-    it("shows the offer for a file that needs transcoding, then creates the player for the next file", async () => {
-      await mountPlayer();
+    it("shows the offer without destroying the player, and the next file swaps normally", async () => {
+      await mountPlayer({ autoPlayEnabled: true });
+      const element = video();
       hoisted.needsTranscode.add("/b.mp4");
+      hoisted.teardown.mockClear();
       await swapTo(FILE_B);
 
       expect(container.querySelector(".offer-notice")).not.toBeNull();
-      expect(hoisted.plyrs[0]?.destroy).toHaveBeenCalledOnce();
+      expect(container.querySelector<HTMLElement>(".video-player-container")?.style.display).toBe("none");
+      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+      expect(video()).toBe(element);
+      expect(element.getAttribute("src")).toBeNull();
+      expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
+      // keys and media session buttons must not start the file behind the offer
+      hoisted.plyrs[0]?.playMock.mockClear();
+      void hoisted.plyrs[0]?.play();
+      expect(hoisted.plyrs[0]?.playMock).not.toHaveBeenCalled();
+      expect(hoisted.attachStream).not.toHaveBeenCalled();
 
       await swapTo(FILE_C);
 
       expect(container.querySelector(".offer-notice")).toBeNull();
-      expect(hoisted.plyrs).toHaveLength(2);
-      expect(video()).not.toBeNull();
+      expect(container.querySelector<HTMLElement>(".video-player-container")?.style.display).toBe("");
+      expect(hoisted.plyrs).toHaveLength(1);
+      expect(video()).toBe(element);
+      expect(element.getAttribute("src")).toBe("/raw/c.mp4");
+    });
+
+    it("starts HLS on the same instance when the offer is accepted", async () => {
+      await mountPlayer({ autoPlayEnabled: true });
+      hoisted.needsTranscode.add("/b.mp4");
+      await swapTo(FILE_B);
+      hoisted.startTranscode.mockClear();
+      hoisted.resetFileState.mockClear();
+
+      container.querySelector<HTMLButtonElement>(".offer-notice button")?.click();
+      await settle();
+
+      expect(hoisted.resetFileState).toHaveBeenCalled();
+      expect(hoisted.startTranscode).toHaveBeenCalledWith({ autoplay: true });
+      expect(hoisted.plyrs).toHaveLength(1);
+      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+      expect(container.querySelector(".offer-notice")).toBeNull();
+    });
+
+    it("keeps the offer when it cannot be accepted", async () => {
+      await mountPlayer();
+      hoisted.needsTranscode.add("/b.mp4");
+      await swapTo(FILE_B);
+      hoisted.acceptOffer = false;
+      hoisted.startTranscode.mockClear();
+
+      container.querySelector<HTMLButtonElement>(".offer-notice button")?.click();
+      await settle();
+
+      expect(hoisted.startTranscode).not.toHaveBeenCalled();
+      expect(container.querySelector(".offer-notice")).not.toBeNull();
+    });
+
+    it("creates the player on accept when the offer came before the first mount", async () => {
+      hoisted.needsTranscode.add("/a.mp4");
+      await mountPlayer({ autoPlayEnabled: true });
+      expect(container.querySelector(".offer-notice")).not.toBeNull();
+      expect(hoisted.plyrs).toHaveLength(0);
+
+      container.querySelector<HTMLButtonElement>(".offer-notice button")?.click();
+      await settle();
+
+      expect(hoisted.plyrs).toHaveLength(1);
+      expect(hoisted.startTranscode).toHaveBeenCalledTimes(1);
+      expect(container.querySelector(".offer-notice")).toBeNull();
+    });
+
+    it("shows the offer on a playback error and keeps the player", async () => {
+      await mountPlayer({ autoPlayEnabled: true });
+      hoisted.teardown.mockClear();
+
+      video().dispatchEvent(new Event("error"));
+      await settle();
+
+      expect(container.querySelector(".offer-notice")).not.toBeNull();
+      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+      expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
     });
 
     it("starts the HLS session of the next file from the URL mode on the same instance", async () => {
