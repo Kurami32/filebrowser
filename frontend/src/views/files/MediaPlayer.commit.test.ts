@@ -9,6 +9,7 @@ import {
   onBeforeUnmount,
   type PropType,
 } from "vue";
+import type { ReqObject } from "@/store/types.ts";
 import MediaPlayer from "./MediaPlayer.vue";
 
 const hoisted = vi.hoisted(() => ({
@@ -114,21 +115,23 @@ vi.mock("@/components/player/VideoPlayer.vue", () => ({
 import { mediaApi } from "@/api/index.js";
 import { state } from "@/store/index.ts";
 
-const audio = (name: string, extra: Record<string, unknown> = {}) => ({
-  name,
-  type: "audio/mpeg",
-  source: "src",
-  path: `/${name}`,
-  metadata: { hasLyrics: true },
-  ...extra,
-});
-const video = (name: string) => ({
-  name,
-  type: "video/mp4",
-  source: "src",
-  path: `/${name}`,
-  subtitles: [{ name: "en.vtt", embedded: false, srclang: "en" }],
-});
+const audio = (name: string, extra: Record<string, unknown> = {}) =>
+  ({
+    name,
+    type: "audio/mpeg",
+    source: "src",
+    path: `/${name}`,
+    metadata: { hasLyrics: true },
+    ...extra,
+  }) as unknown as ReqObject;
+const video = (name: string) =>
+  ({
+    name,
+    type: "video/mp4",
+    source: "src",
+    path: `/${name}`,
+    subtitles: [{ name: "en.vtt", embedded: false, srclang: "en" }],
+  }) as unknown as ReqObject;
 
 async function settle() {
   for (let i = 0; i < 6; i++) {
@@ -146,7 +149,7 @@ describe("MediaPlayer committed source", () => {
   let revoke: ReturnType<typeof vi.fn>;
   let unmounted = false;
 
-  async function mountView(req: Record<string, unknown>) {
+  async function mountView(req: ReqObject) {
     state.req = req;
     container = document.createElement("div");
     document.body.appendChild(container);

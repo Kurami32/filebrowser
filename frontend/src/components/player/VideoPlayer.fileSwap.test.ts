@@ -3,13 +3,14 @@ import { type App, createApp, h, nextTick, reactive } from "vue";
 import VideoPlayer from "./VideoPlayer.vue";
 
 const hoisted = vi.hoisted(() => ({
-  plyrs: [] as Array<{ destroy: Mock; playMock: Mock; speed: number }>,
+  plyrs: [] as Array<{ destroy: Mock; play: Mock; playMock: Mock; speed: number }>,
   /** Paths whose format needs transcoding first (the offer), and paths opened in an HLS mode by the URL. */
   needsTranscode: new Set<string>(),
   urlMode: new Map<string, string>(),
   videoPreviews: false,
   offerGate: null as null | Promise<void>,
   teardown: vi.fn(),
+  dispose: vi.fn(),
   resetFileState: vi.fn(),
   initMode: vi.fn(),
   startTranscode: vi.fn(),
@@ -221,7 +222,7 @@ vi.mock("@/composables/player/useTranscodePlayback.ts", async () => {
         startTranscodePlayback: hoisted.startTranscode,
         switchTranscodeMode: vi.fn(),
         teardownTranscodePlayback: hoisted.teardown,
-        disposeTranscodeController: vi.fn(),
+        disposeTranscodeController: hoisted.dispose,
         attachVideoStreamAndPlay: hoisted.attachStream,
         clearAttachVideoStreamWait: vi.fn(),
         disarmResumeOnNextGesture: vi.fn(),
@@ -592,5 +593,53 @@ describe("VideoPlayer file swap", () => {
     app.unmount();
     unmounted = true;
     expect(hoisted.plyrs[0]?.destroy).toHaveBeenCalledOnce();
+  });
+  describe("leaks", () => {
+    const pagehideCalls = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.filter(([type]) => type === "pagehide");
+
+    it("registers the page listeners once, however many files are swapped, and removes them on unmount", async () => {
+      const add = vi.spyOn(window, "addEventListener");
+      const remove = vi.spyOn(window, "removeEventListener");
+      await mountPlayer();
+      for (const next of [FILE_B, FILE_C, FILE_B]) await swapTo(next);
+      expect(pagehideCalls(add)).toHaveLength(1);
+      expect(pagehideCalls(remove)).toHaveLength(0);
+
+      app.unmount();
+      unmounted = true;
+      expect(pagehideCalls(remove)).toHaveLength(1);
+    });
+
+    it("revokes the embedded cover of the previous file on a swap and the last one on unmount", async () => {
+      const revoke = vi.fn();
+      let created = 0;
+      vi.stubGlobal(
+        "URL",
+        Object.assign(URL, { createObjectURL: vi.fn(() => `blob:art-${created++}`), revokeObjectURL: revoke }),
+      );
+      const withArt = (name: string) =>
+        file(name, { req: { ...file(name).req, metadata: { title: name, albumArt: btoa(name) } } });
+      await mountPlayer(withArt("a"));
+      await swapTo(withArt("b"));
+      expect(revoke).toHaveBeenCalledWith("blob:art-0");
+      expect(revoke).not.toHaveBeenCalledWith("blob:art-1");
+
+      app.unmount();
+      unmounted = true;
+      expect(revoke).toHaveBeenCalledWith("blob:art-1");
+    });
+
+    it("stops the transcode session on every swap and disposes the controller only on unmount", async () => {
+      await mountPlayer();
+      hoisted.teardown.mockClear();
+      await swapTo(FILE_B);
+      await swapTo(FILE_C);
+      expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
+      expect(hoisted.dispose).not.toHaveBeenCalled();
+
+      app.unmount();
+      unmounted = true;
+      expect(hoisted.dispose).toHaveBeenCalledWith({ stopSession: true });
+    });
   });
 });
