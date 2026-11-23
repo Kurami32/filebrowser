@@ -93,6 +93,15 @@ describe("useMediaPlayer", () => {
       expect(plyr.speed).toBe(1.5);
     });
 
+    it("forgets the selected caption track, so a track at the same index in the next file is enabled", () => {
+      const { releaseFile, plyr } = setup();
+      const captions = { currentTrack: 0, currentTrackNode: {} as TextTrack };
+      Object.assign(plyr, { captions });
+      releaseFile();
+      expect(captions.currentTrack).toBe(-1);
+      expect(captions.currentTrackNode).toBeUndefined();
+    });
+
     it("reports that playback stopped, because load() drops the pause event", () => {
       const { releaseFile } = setup();
       releaseFile();

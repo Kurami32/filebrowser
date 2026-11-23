@@ -27,6 +27,7 @@ type PlyrRuntimeOptions = Plyr.Options & { playsinline?: boolean; preload?: stri
 interface PlyrRuntime {
   media?: HTMLMediaElement;
   off: () => void;
+  captions?: { currentTrack: number; currentTrackNode?: TextTrack };
 }
 
 export interface MountedFileKey {
@@ -273,11 +274,20 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     tryPlay().catch(retryWhenPlayable);
   }
 
+  /** Plyr keeps the selected caption by index and track node. When the next file has a track at the same index, Plyr sees "no change" */
+  function resetCaptionTrack(): void {
+    const captions = (player.value as (Plyr & PlyrRuntime) | null)?.captions;
+    if (!captions) return;
+    captions.currentTrack = -1;
+    captions.currentTrackNode = undefined;
+  }
+
   /** Stops the current file and keeps the instance alive; the playback rate survives the `load()`. */
   function releaseFile(): void {
     const media = getActiveMediaElement();
     if (media) media.defaultPlaybackRate = media.playbackRate;
     stopMediaElement(media);
+    resetCaptionTrack();
     options.onReleaseFile?.();
     releasedFor = lifecycle.mountedFile;
   }
