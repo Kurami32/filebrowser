@@ -42,7 +42,7 @@ function setup(kind: "audio" | "video" = "video") {
   const fake: Partial<Plyr> & { media: HTMLMediaElement } = { speed: 1, destroy: vi.fn(), media };
   const plyr = fake as Plyr & { media: HTMLMediaElement };
   const player = shallowRef<Plyr | null>(plyr);
-  const hooks = { destroy: vi.fn(), beforeStopMedia: vi.fn(), onReleaseFile: vi.fn() };
+  const hooks = { destroy: vi.fn(), beforeStopMedia: vi.fn(), onReleaseFile: vi.fn(), restoreSource: vi.fn() };
   const { result } = withSetup(() =>
     useMediaPlayer({
       kind,

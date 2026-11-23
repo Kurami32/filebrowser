@@ -115,6 +115,7 @@ export function useMediaPlayer(options: Options) {
     getActiveMediaElement: () => fake?.media ?? options.getMediaElement() ?? null,
     stopMediaElement,
     releaseFile: () => options.onReleaseFile?.(),
+    resumeFile: () => {},
     playWhenReady: () => {
       void Promise.resolve(fake?.play()).catch(() => {});
     },

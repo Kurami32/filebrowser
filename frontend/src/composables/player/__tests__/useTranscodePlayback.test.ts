@@ -172,6 +172,26 @@ describe("useTranscodePlayback", () => {
     });
   });
 
+  describe("startVideoTranscode for a swapped-away file", () => {
+    it("leaves the current offer and start flag untouched when the accept result is stale", async () => {
+      getSessions.mockResolvedValue({ canStart: true, sessions: [] });
+      const { transcode, hooks } = setup();
+      await transcode.offerTranscodePlayback();
+      const offer = transcode.transcodeOffer.value;
+      expect(await transcode.startVideoTranscode(() => false)).toBe(false);
+      expect(transcode.transcodeOffer.value).toBe(offer);
+      expect(transcode.startRequested.value).toBe(false);
+      expect(hooks.onPlaybackStart).not.toHaveBeenCalled();
+    });
+
+    it("does not show an offer for a stale denied result", async () => {
+      getSessions.mockResolvedValue({ canStart: false, blockReason: "global_limit", globalLimit: 1, sessions: [] });
+      const { transcode } = setup();
+      expect(await transcode.startVideoTranscode(() => false)).toBe(false);
+      expect(transcode.transcodeOffer.value).toBeNull();
+    });
+  });
+
   describe("initTranscodeModeFromRoute", () => {
     it("starts native for formats that need transcoding first, ignoring the URL mode", () => {
       const { transcode } = setup({ transcode: "balanced" });

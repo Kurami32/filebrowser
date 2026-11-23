@@ -1,4 +1,5 @@
 <template>
+  <Teleport :to="fullscreenHost || 'body'" :disabled="!fullscreenHost">
   <!-- Left edge detection zone -->
   <div
     v-if="enabled && hasPrevious"
@@ -89,6 +90,7 @@
   >
     <i class="material-symbols">close</i>
   </button>
+  </Teleport>
 
   <!-- Prefetch links for better performance -->
   <link v-if="previousRaw" rel="prefetch" :href="previousRaw" />
@@ -114,6 +116,7 @@ export default {
   data() {
     return {
       hoverNav: false,
+      fullscreenHost: null,
       dragState: {
         isDragging: false,
         type: null, // 'previous' or 'next'
@@ -324,6 +327,8 @@ export default {
     window.addEventListener("touchmove", this.handleDrag, { passive: false });
     window.addEventListener("touchend", this.endDrag);
     document.addEventListener("click", this.handleDocumentClick);
+    document.addEventListener("fullscreenchange", this.syncFullscreenHost);
+    this.syncFullscreenHost();
     // Capture phase: run before preview gesture handlers (document-level capture mousemove)
     // that may stopPropagation, which would skip bubble-phase window listeners.
     window.addEventListener("mousemove", this.handleGlobalMouseMove, true);
@@ -350,6 +355,7 @@ export default {
     window.removeEventListener("touchmove", this.handleDrag);
     window.removeEventListener("touchend", this.endDrag);
     document.removeEventListener("click", this.handleDocumentClick);
+    document.removeEventListener("fullscreenchange", this.syncFullscreenHost);
     window.removeEventListener("mousemove", this.handleGlobalMouseMove, true);
 
     // Clear our local timeout
@@ -364,6 +370,10 @@ export default {
     mutations.clearNavigation();
   },
   methods: {
+    syncFullscreenHost() {
+      const el = document.fullscreenElement;
+      this.fullscreenHost = el && el !== document.documentElement && el !== document.body ? el : null;
+    },
     updateNavigationEnabled() {
       const shouldEnable = previewViews.includes(this.currentView);
       mutations.setNavigationEnabled(shouldEnable);

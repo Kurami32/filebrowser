@@ -419,6 +419,7 @@ const {
   stopMediaElement,
   setMountedFile,
   releaseFile,
+  resumeFile,
   playWhenReady,
   reapplyPlaybackRate,
   destroyPlayer,
@@ -434,6 +435,7 @@ const {
     teardownTranscodePlayback({ stopSession: true });
     disarmResumeOnNextGesture();
   },
+  restoreSource: restoreFileSource,
 });
 const { attachKeyboard, detachKeyboard } = useMediaKeyboard({
   player,
@@ -620,12 +622,8 @@ function destroy(): void {
  */
 async function onStartTranscodeClick(): Promise<void> {
   const generation = swapGeneration;
-  if (!(await startVideoTranscode())) {
-    return;
-  }
-  if (generation !== swapGeneration || lifecycle.unmounted) {
-    // another file arrived while the check ran: the accept belonged to the previous one
-    startRequested.value = false;
+  const isCurrent = () => generation === swapGeneration && !lifecycle.unmounted;
+  if (!(await startVideoTranscode(isCurrent)) || !isCurrent()) {
     return;
   }
   resetFilePlaybackState();
@@ -772,8 +770,29 @@ function shouldStartTranscodeWithFile(): boolean {
   return startRequested.value || (wantsTranscodePlayback.value && !shouldProactivelyOfferTranscode.value);
 }
 
+async function restoreFileSource(): Promise<void> {
+  if (lifecycle.tornDown || lifecycle.unmounted || transcodeOffer.value || !player.value) {
+    return;
+  }
+  const generation = swapGeneration;
+  resetFilePlaybackState();
+  await nextTick();
+  if (generation !== swapGeneration || lifecycle.unmounted || transcodeOffer.value) {
+    return;
+  }
+  const media = videoElement.value;
+  const src = nativeVideoSrc.value;
+  if (media && src && media.getAttribute("src") !== src) {
+    media.setAttribute("src", src);
+    media.load();
+  }
+  reapplyPlaybackRate();
+  await startFile();
+}
+
 /** Per file, once the player exists: scrub preview, loading indicator and the transcode start. */
 async function startFile(): Promise<void> {
+  resumeFile();
   setupScrubPreview();
   setupVideoLoadingIndicator();
   if (shouldStartTranscodeWithFile()) {
@@ -792,6 +811,7 @@ async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
     return;
   }
   const generation = ++swapGeneration;
+  offerCheckPending.value = false;
   const isCurrent = () =>
     generation === swapGeneration && !lifecycle.unmounted && !lifecycle.tornDown && Boolean(player.value);
   releaseFile();
@@ -1118,16 +1138,21 @@ onMounted(async () => {
   // detection works while Plyr is still waiting on subtitles/metadata.
   setMountedFile(props.req?.source, props.req?.path);
   loadMediaMetadata();
+  let offerLookupStale = false;
   if (shouldProactivelyOfferTranscode.value) {
     // Decide before the player appears: an unsupported format gets the offer, not a blank player.
+    const generation = swapGeneration;
     offerCheckPending.value = true;
     try {
       await offerTranscodePlayback();
     } finally {
-      offerCheckPending.value = false;
+      if (generation === swapGeneration) {
+        offerCheckPending.value = false;
+      }
     }
+    offerLookupStale = generation !== swapGeneration;
   }
-  if (!transcodeOffer.value) {
+  if (!offerLookupStale && !transcodeOffer.value) {
     void initializePlayer();
   }
   if (lifecycle.unmounted) return;

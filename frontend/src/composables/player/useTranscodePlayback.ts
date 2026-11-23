@@ -1202,7 +1202,7 @@ export function useTranscodePlayback(options: UseTranscodePlaybackOptions) {
   }
 
   /** The offer's button: verifies a session can start and hides the offer. Returns whether the player should mount. */
-  async function startVideoTranscode(): Promise<boolean> {
+  async function startVideoTranscode(isCurrent: () => boolean = () => true): Promise<boolean> {
     if (startRequested.value) {
       transcodeOffer.value = null;
       return false;
@@ -1212,6 +1212,9 @@ export function useTranscodePlayback(options: UseTranscodePlaybackOptions) {
         source: getReq()?.source,
         path: getReq()?.path,
       }) as TranscodeStatus;
+      if (!isCurrent()) {
+        return false;
+      }
       if (!status.canStart) {
         showTranscodeOffer(status);
         return false;

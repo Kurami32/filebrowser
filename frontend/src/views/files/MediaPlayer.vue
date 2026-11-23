@@ -214,7 +214,7 @@ async function loadMediaForReq() {
   try {
     await loadAndCommit(identity, isStale);
   } finally {
-    if (inFlightIdentity === identity) {
+    if (!isStale() && inFlightIdentity === identity) {
       inFlightIdentity = null;
     }
     if (!isStale()) {

@@ -313,6 +313,7 @@ const {
   getRequestedFile: () => props.req,
   onPlaybackState: updateMediaSessionPlaybackState,
   destroy,
+  restoreSource: restoreFileSource,
 });
 const { attachKeyboard, detachKeyboard } = useMediaKeyboard({
   player,
@@ -367,6 +368,16 @@ function setupPlayerEvents(): void {
 const mediaSessionInfo = () => buildMediaSessionInfo(metadata.value, fileName.value, artworkUrl.value);
 
 let swapGeneration = 0;
+
+function restoreFileSource(): void {
+  const media = audioElement.value;
+  if (lifecycle.tornDown || !media || !props.raw || media.getAttribute("src") === props.raw) {
+    return;
+  }
+  media.setAttribute("src", props.raw);
+  media.load();
+  reapplyPlaybackRate();
+}
 
 /** A new file on the same player: only the per-file data changes (pre-flush, before the new `:src` renders). */
 async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {

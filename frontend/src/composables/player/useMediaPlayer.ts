@@ -101,6 +101,7 @@ interface MediaPlayerOptions {
   beforeStopMedia?: () => void;
   /** Runs after the element is stopped by `releaseFile`, e.g. to end a transcode session. */
   onReleaseFile?: () => void;
+  restoreSource?: () => void | Promise<void>;
 }
 
 /** Creates, wires, stops and destroys Plyr , and ends/advances playback. */
@@ -291,6 +292,9 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     options.onReleaseFile?.();
     releasedFor = lifecycle.mountedFile;
   }
+  function resumeFile(): void {
+    releasedFor = null;
+  }
 
   /** Marks the file the instance now plays, for the route-leave check. */
   function setMountedFile(source?: string, path?: string): void {
@@ -322,6 +326,14 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     stopMediaElement(media);
   }
 
+  function restoreSourceIfReleased(): void {
+    if (!releasedFor || releasedFor !== lifecycle.mountedFile) {
+      return;
+    }
+    releasedFor = null;
+    void options.restoreSource?.();
+  }
+
   function stopIfRouteLeftThisFile(): void {
     if (lifecycle.tornDown) {
       return;
@@ -343,12 +355,14 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
       current === expected ||
       current.startsWith(`${expected}#`)
     ) {
+      restoreSourceIfReleased();
       return;
     }
     if (
       decodePathSafely(normalizedCurrent) === decodePathSafely(normalizedExpected) ||
       decodePathSafely(current).startsWith(`${decodePathSafely(expected)}#`)
     ) {
+      restoreSourceIfReleased();
       return;
     }
     if (releasedFor && releasedFor === mounted) {
@@ -408,6 +422,7 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     getActiveMediaElement,
     stopMediaElement,
     releaseFile,
+    resumeFile,
     playWhenReady,
     setMountedFile,
     reapplyPlaybackRate,

@@ -178,10 +178,19 @@ test("fullscreen persists across next and previous", async ({ page, checkForErro
   const isFullscreen = () => page.evaluate(() => document.fullscreenElement !== null);
   await expect.poll(isFullscreen, { timeout: 10_000 }).toBe(true);
 
+  const navInFullscreen = (label: string) =>
+    page.evaluate(
+      (aria) => document.fullscreenElement?.querySelector(`button[aria-label="${aria}"]`) != null,
+      label,
+    );
+  await expect.poll(() => navInFullscreen("Next"), { timeout: 10_000 }).toBe(true);
+  await expect(page.locator('button[aria-label="Next"]')).toBeVisible();
+
   await page.locator('button[aria-label="Next"]').click();
   await expect(page).toHaveTitle(`Graham's Filebrowser - Files - ${NEXT_PREVIEW_VIDEO}`);
   await expectPlayerReused(page);
   expect(await isFullscreen()).toBe(true);
+  await expect.poll(() => navInFullscreen("Previous"), { timeout: 10_000 }).toBe(true);
 
   await page.locator('button[aria-label="Previous"]').click();
   await expect(page).toHaveTitle(`Graham's Filebrowser - Files - ${NATIVE_PREVIEW_VIDEO}`);
