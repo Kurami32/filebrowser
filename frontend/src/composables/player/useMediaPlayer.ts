@@ -65,12 +65,6 @@ export function resolveMountedFileKey(source?: string, path?: string): MountedFi
   };
 }
 
-/** Identity of a file for swap detection (source + path). */
-export function fileKey(source?: string, path?: string): string {
-  const file = resolveMountedFileKey(source, path);
-  return `${file.source}|${file.path}`;
-}
-
 const PLYR_CONTROLS = [
   "play-large",
   "rewind",
@@ -83,9 +77,10 @@ const PLYR_CONTROLS = [
   "volume",
   "captions",
   "settings",
+  "pip",
   "fullscreen",
 ];
-const AUDIO_EXCLUDED_CONTROLS = ["play-large", "captions", "fullscreen"];
+const AUDIO_EXCLUDED_CONTROLS = ["play-large", "captions", "pip", "fullscreen"];
 
 export type MediaKind = "audio" | "video";
 
@@ -239,7 +234,7 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
   }
 
   function getActiveMediaElement(): HTMLMediaElement | null {
-    return (player.value as unknown as PlyrRuntime | null)?.media ?? options.getMediaElement() ?? null;
+    return (player.value as (Plyr & PlyrRuntime) | null)?.media ?? options.getMediaElement() ?? null;
   }
 
   function stopMediaElement(media: HTMLMediaElement | null = null): void {
@@ -253,12 +248,29 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     } catch (_) {
       // ignore
     }
+    mutations.setPlaybackState(false);
     el.removeAttribute("src");
     try {
       el.load();
     } catch (_) {
       // ignore
     }
+  }
+
+  /** Starts the file the instance now holds */
+  function playWhenReady(isCurrent: () => boolean = () => true): void {
+    const media = getActiveMediaElement();
+    const current = player.value;
+    if (!media || !current) return;
+    const tryPlay = () => Promise.resolve(current.play());
+    const retryWhenPlayable = () => {
+      const retry = () => {
+        if (isCurrent() && media.paused) void tryPlay().catch(() => {});
+      };
+      if (media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) retry();
+      else media.addEventListener("canplay", retry, { once: true });
+    };
+    tryPlay().catch(retryWhenPlayable);
   }
 
   /** Stops the current file and keeps the instance alive; the playback rate survives the `load()`. */
@@ -291,7 +303,7 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
       stopMediaElement(media);
       return;
     }
-    (current as unknown as PlyrRuntime).off();
+    (current as Plyr & PlyrRuntime).off();
     stopMediaElement(media);
     current.destroy();
     player.value = null;
@@ -386,6 +398,7 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     getActiveMediaElement,
     stopMediaElement,
     releaseFile,
+    playWhenReady,
     setMountedFile,
     reapplyPlaybackRate,
     destroyPlayer,

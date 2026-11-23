@@ -2,6 +2,7 @@ import type Plyr from "plyr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { shallowRef } from "vue";
 import { useMediaSession } from "../useMediaSession.ts";
+import { type FakeMediaSession, installMediaSession, removeMediaSession } from "./mediaTestUtils.ts";
 
 vi.mock("@/store/index.ts", () => ({
   state: { playbackQueue: { queue: [], currentIndex: -1, loop: "off" } },
@@ -12,25 +13,19 @@ vi.mock("@/utils/playbackQueue.js", () => ({ getNextItem: vi.fn(), navigatePlayb
 const INFO = { title: "T", artist: "A", album: "B", artworkSrc: "blob:art" };
 
 describe("useMediaSession", () => {
-  let session: { metadata: unknown; setActionHandler: ReturnType<typeof vi.fn>; playbackState: string };
+  let session: FakeMediaSession;
 
   beforeEach(() => {
-    session = { metadata: null, setActionHandler: vi.fn(), playbackState: "none" };
-    vi.stubGlobal("MediaMetadata", class FakeMetadata {
-      constructor(init: object) {
-        Object.assign(this, init);
-      }
-    });
-    Object.defineProperty(navigator, "mediaSession", { value: session, configurable: true });
+    session = installMediaSession();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete (navigator as unknown as Record<string, unknown>).mediaSession;
+    removeMediaSession();
   });
 
   function setup() {
-    const player = shallowRef({ playing: false, duration: 0, speed: 1, currentTime: 0 } as unknown as Plyr);
+    const player = shallowRef({ playing: false, duration: 0, speed: 1, currentTime: 0 } as Plyr);
     return useMediaSession(player);
   }
 
@@ -44,7 +39,7 @@ describe("useMediaSession", () => {
     media.updateMediaSessionMetadata({ title: "T2", artist: "A2", album: "B2" });
     expect(session.setActionHandler).toHaveBeenCalledTimes(registered);
     expect(session.metadata).toMatchObject({ title: "T2", artist: "A2", album: "B2" });
-    expect((session.metadata as { artwork: { src: string }[] }).artwork[0]?.src).toContain("/icon.png");
+    expect(session.metadata?.artwork?.[0]?.src).toContain("/icon.png");
   });
 
   it("does not touch the session when it does not own it", () => {

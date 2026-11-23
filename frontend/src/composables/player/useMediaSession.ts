@@ -1,5 +1,6 @@
 import type { ShallowRef } from "vue";
 import type Plyr from "plyr";
+import type { EmbeddedMetadata } from "@/composables/player/useEmbeddedArtwork.ts";
 import { state } from "@/store/index.ts";
 import { globalVars } from "@/utils/constants.ts";
 import { getNextItem, navigatePlaybackQueue } from "@/utils/playbackQueue.js";
@@ -11,6 +12,19 @@ export interface MediaSessionInfo {
   artist: string;
   album: string;
   artworkSrc?: string;
+}
+
+export function buildMediaSessionInfo(
+  metadata: EmbeddedMetadata | null,
+  fallbackTitle: string,
+  artworkSrc?: string,
+): MediaSessionInfo {
+  return {
+    title: metadata?.title || fallbackTitle,
+    artist: metadata?.artist || globalVars.name || "Filebrowser Quantum",
+    album: metadata?.album || "",
+    artworkSrc,
+  };
 }
 
 /** Browser Media Session metadata, transport handlers and playback state for one player. */

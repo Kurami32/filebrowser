@@ -378,7 +378,7 @@ function handleContextMenu(event: MouseEvent, node: TreeNode) {
 }
 
 function navigateTo(node: TreeNode) {
-  // mutations.setNavigationTransitioning(true);
+  mutations.setNavigationTransitioning(true);
   if (isShare.value) {
     goToItem(shareHash.value, node.path, {}, false, true);
   } else {

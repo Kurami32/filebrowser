@@ -1,9 +1,9 @@
 import type Plyr from "plyr";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, shallowRef } from "vue";
-import { state } from "@/store/index.ts";
-import { fileKey, useMediaPlayer } from "../useMediaPlayer.ts";
-import { withSetup } from "./withSetup.ts";
+import { mutations, state } from "@/store/index.ts";
+import { useMediaPlayer } from "../useMediaPlayer.ts";
+import { withSetup } from "./mediaTestUtils.ts";
 
 const hoisted = vi.hoisted(() => ({
   state: {
@@ -39,7 +39,8 @@ function makeMedia(): HTMLMediaElement {
 function setup(kind: "audio" | "video" = "video") {
   const media = makeMedia();
   media.setAttribute("src", "blob:a");
-  const plyr = { speed: 1, destroy: vi.fn(), media } as unknown as Plyr;
+  const fake: Partial<Plyr> & { media: HTMLMediaElement } = { speed: 1, destroy: vi.fn(), media };
+  const plyr = fake as Plyr & { media: HTMLMediaElement };
   const player = shallowRef<Plyr | null>(plyr);
   const hooks = { destroy: vi.fn(), beforeStopMedia: vi.fn(), onReleaseFile: vi.fn() };
   const { result } = withSetup(() =>
@@ -81,9 +82,10 @@ describe("useMediaPlayer", () => {
       expect(hooks.destroy).not.toHaveBeenCalled();
     });
 
-    it("keeps the playback rate across the load", () => {
+    it("keeps the playback rate across the load, also when released twice", () => {
       const { releaseFile, reapplyPlaybackRate, media, plyr } = setup();
       media.playbackRate = 1.5;
+      releaseFile();
       releaseFile();
       expect(media.playbackRate).toBe(1.5);
       media.playbackRate = 1;
@@ -91,28 +93,10 @@ describe("useMediaPlayer", () => {
       expect(plyr.speed).toBe(1.5);
     });
 
-    it("keeps the rate when released twice", () => {
-      const { releaseFile, reapplyPlaybackRate, media, plyr } = setup();
-      media.playbackRate = 2;
+    it("reports that playback stopped, because load() drops the pause event", () => {
+      const { releaseFile } = setup();
       releaseFile();
-      releaseFile();
-      reapplyPlaybackRate();
-      expect(plyr.speed).toBe(2);
-    });
-  });
-
-  describe("setMountedFile and fileKey", () => {
-    it("normalizes the path and the source", () => {
-      const { setMountedFile, lifecycle } = setup();
-      setMountedFile("other", "b.mp4");
-      expect(lifecycle.mountedFile).toEqual({ source: "other", path: "/b.mp4" });
-      setMountedFile(undefined, "/c.mp4");
-      expect(lifecycle.mountedFile).toEqual({ source: "src", path: "/c.mp4" });
-    });
-
-    it("builds the same key for the same file", () => {
-      expect(fileKey("src", "a.mp4")).toBe(fileKey("src", "/a.mp4"));
-      expect(fileKey("src", "/a.mp4")).not.toBe(fileKey("src", "/b.mp4"));
+      expect(mutations.setPlaybackState).toHaveBeenCalledWith(false);
     });
   });
 

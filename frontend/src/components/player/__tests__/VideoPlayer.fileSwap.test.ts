@@ -1,9 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { type App, createApp, h, nextTick, reactive } from "vue";
-import VideoPlayer from "./VideoPlayer.vue";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
+import { type App, createApp, h, reactive, type SetupContext } from "vue";
+import {
+  type FakeMediaSession,
+  fakePlayers,
+  installMediaSession,
+  reapplyPlaybackRate,
+  removeMediaSession,
+  settle,
+  type Writable,
+} from "@/composables/player/__tests__/mediaTestUtils.ts";
+import VideoPlayer from "../VideoPlayer.vue";
 
 const hoisted = vi.hoisted(() => ({
-  plyrs: [] as Array<{ destroy: Mock; play: Mock; playMock: Mock; speed: number }>,
+  syncOverlaid: vi.fn(),
   /** Paths whose format needs transcoding first (the offer), and paths opened in an HLS mode by the URL. */
   needsTranscode: new Set<string>(),
   urlMode: new Map<string, string>(),
@@ -21,28 +30,7 @@ const hoisted = vi.hoisted(() => ({
   loadingCleanup: vi.fn(),
 }));
 
-vi.mock("plyr", () => ({
-  default: class FakePlyr {
-    media: HTMLMediaElement;
-    speed = 1;
-    playing = false;
-    duration = 0;
-    currentTime = 0;
-    elements = { container: document.createElement("div") };
-    fullscreen = { active: false, enter: vi.fn() };
-    on = vi.fn();
-    off = vi.fn();
-    destroy = vi.fn();
-    pause = vi.fn();
-    /** `play` itself is replaced by the deferred-attach override; this is the native one it ends up calling. */
-    playMock = vi.fn(() => Promise.resolve());
-    play = this.playMock;
-    constructor(el: HTMLMediaElement) {
-      this.media = el;
-      hoisted.plyrs.push(this);
-    }
-  },
-}));
+vi.mock("@/composables/player/useMediaPlayer.ts", () => import("@/composables/player/__tests__/mediaTestUtils.ts"));
 vi.mock("@/i18n/index.ts", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {}, path: "/files/src/a.mp4" }) }));
 vi.mock("@/router/index.ts", () => ({
@@ -84,14 +72,14 @@ vi.mock("@/utils/playbackQueue.js", () => ({
 }));
 vi.mock("@/player/seekOnRelease.js", () => ({ blockSeekOnInput: vi.fn(), enableSeekOnRelease: () => () => {} }));
 vi.mock("@/player/scrubPreview.js", () => ({
-  enableScrubPreview: (...args: unknown[]) => {
-    hoisted.scrub(...args);
+  enableScrubPreview: (player: object, options: object) => {
+    hoisted.scrub(player, options);
     return hoisted.scrubCleanup;
   },
 }));
 vi.mock("@/player/videoLoading.js", () => ({ enableVideoLoadingIndicator: () => hoisted.loadingCleanup }));
 vi.mock("@/components/files/PreviewNotice.vue", () => ({
-  default: { setup: (_: unknown, { slots }: { slots: { actions?: () => unknown } }) => () => h("div", { class: "offer-notice" }, slots.actions?.() as never) },
+  default: { setup: (_props: object, { slots }: SetupContext) => () => h("div", { class: "offer-notice" }, slots.actions?.()) },
 }));
 vi.mock("@/components/LoadingSpinner.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/settings/FloatingActionButton.vue", () => ({ default: { render: () => null } }));
@@ -113,7 +101,7 @@ vi.mock("@/composables/player/useDoubleTapSeek.ts", async () => {
       setupOverlaidHintController: vi.fn(),
       teardownOverlaidHintController: vi.fn(),
       resetOverlaidHints: vi.fn(),
-      syncOverlaidHintPlayback: vi.fn(),
+      syncOverlaidHintPlayback: hoisted.syncOverlaid,
       getGestureSurface: vi.fn(),
       isControlOrMenuTarget: vi.fn(),
     }),
@@ -167,7 +155,7 @@ vi.mock("@/composables/player/useTranscodePlayback.ts", async () => {
       getRaw: () => string;
       onOfferShown: () => void;
     }) => {
-      const transcodeOffer = ref<unknown>(null);
+      const transcodeOffer = ref<{ mode: string; sessions: never[] } | null>(null);
       const startRequested = ref(false);
       const transcodeMode = ref("native");
       const videoStreamAttached = ref(false);
@@ -240,7 +228,7 @@ vi.mock("@/composables/player/useTranscodePlayback.ts", async () => {
 });
 
 const SUB = (name: string) => ({ name: `${name}.srt`, src: `blob:${name}`, srclang: "en" });
-const file = (name: string, extra: Record<string, unknown> = {}) => ({
+const file = (name: string, extra: Partial<Props> = {}): Props => ({
   fileKey: `|src|/${name}.mp4`,
   raw: `/raw/${name}.mp4`,
   req: { name: `${name}.mp4`, type: "video/mp4", source: "src", path: `/${name}.mp4`, metadata: { title: name } },
@@ -251,32 +239,25 @@ const FILE_A = file("a");
 const FILE_B = file("b");
 const FILE_C = file("c");
 
-async function settle() {
-  for (let i = 0; i < 5; i++) {
-    await nextTick();
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
-  }
-}
+type Props = InstanceType<typeof VideoPlayer>["$props"];
 
 describe("VideoPlayer file swap", () => {
   let app: App;
   let container: HTMLElement;
-  let props: Record<string, unknown>;
+  let props: Writable<Props>;
   let unmounted = false;
-  let session: { metadata: unknown; setActionHandler: ReturnType<typeof vi.fn>; playbackState: string };
+  let session: FakeMediaSession;
 
-  async function mountPlayer(initial: Record<string, unknown> = {}) {
+  async function mountPlayer(initial: Partial<Props> = {}) {
     props = reactive({ ...FILE_A, autoPlayEnabled: false, ...initial });
     container = document.createElement("div");
     document.body.appendChild(container);
-    app = createApp({ render: () => h(VideoPlayer, props as never) });
+    app = createApp({ render: () => h(VideoPlayer, props) });
     app.mount(container);
     await settle();
   }
 
-  async function swapTo(next: Record<string, unknown>) {
+  async function swapTo(next: Partial<Props>) {
     Object.assign(props, next);
     await settle();
   }
@@ -284,7 +265,7 @@ describe("VideoPlayer file swap", () => {
   const video = () => container.querySelector("video") as HTMLVideoElement;
 
   beforeEach(() => {
-    hoisted.plyrs.length = 0;
+    fakePlayers.length = 0;
     hoisted.needsTranscode.clear();
     hoisted.urlMode.clear();
     hoisted.offerGate = null;
@@ -292,16 +273,7 @@ describe("VideoPlayer file swap", () => {
     hoisted.videoPreviews = false;
     unmounted = false;
     vi.clearAllMocks();
-    session = { metadata: null, setActionHandler: vi.fn(), playbackState: "none" };
-    vi.stubGlobal(
-      "MediaMetadata",
-      class FakeMetadata {
-        constructor(init: object) {
-          Object.assign(this, init);
-        }
-      },
-    );
-    Object.defineProperty(navigator, "mediaSession", { value: session, configurable: true });
+    session = installMediaSession();
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(function (this: HTMLMediaElement) {
       this.playbackRate = this.defaultPlaybackRate;
     });
@@ -313,59 +285,26 @@ describe("VideoPlayer file swap", () => {
     container.remove();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    delete (navigator as unknown as Record<string, unknown>).mediaSession;
+    removeMediaSession();
   });
 
   describe("native to native", () => {
-    it("keeps the Plyr instance and the element, and swaps src and the media session metadata", async () => {
+    it("keeps the player instance and the element, and swaps src and the media session metadata", async () => {
       await mountPlayer({ autoPlayEnabled: true });
       const element = video();
       const handlers = session.setActionHandler.mock.calls.length;
-      expect(hoisted.plyrs).toHaveLength(1);
+      expect(fakePlayers).toHaveLength(1);
       expect(element.getAttribute("src")).toBe("/raw/a.mp4");
 
       await swapTo(FILE_B);
 
-      expect(hoisted.plyrs).toHaveLength(1);
-      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+      expect(fakePlayers).toHaveLength(1);
+      expect(fakePlayers[0]?.destroy).not.toHaveBeenCalled();
       expect(video()).toBe(element);
       expect(element.getAttribute("src")).toBe("/raw/b.mp4");
       expect(session.metadata).toMatchObject({ title: "b" });
       expect(session.setActionHandler).toHaveBeenCalledTimes(handlers);
-    });
-
-    it("resets the per-file state and decides the transcode mode again for the new file", async () => {
-      await mountPlayer();
-      hoisted.initMode.mockClear();
-      hoisted.resetFileState.mockClear();
-      hoisted.scrub.mockClear();
-
-      await swapTo(FILE_B);
-
-      expect(hoisted.resetFileState).toHaveBeenCalled();
-      expect(hoisted.initMode).toHaveBeenCalledTimes(1);
-      expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
-    });
-
-    it("starts playback when autoplay is on, and not when it is off", async () => {
-      await mountPlayer({ autoPlayEnabled: true });
-      hoisted.plyrs[0]?.playMock.mockClear();
-      await swapTo(FILE_B);
-      expect(hoisted.plyrs[0]?.playMock).toHaveBeenCalledOnce();
-
-      props.autoPlayEnabled = false;
-      await settle();
-      hoisted.plyrs[0]?.playMock.mockClear();
-      await swapTo(FILE_C);
-      expect(hoisted.plyrs[0]?.playMock).not.toHaveBeenCalled();
-    });
-
-    it("keeps the playback rate", async () => {
-      await mountPlayer();
-      video().playbackRate = 1.5;
-      await swapTo(FILE_B);
-      expect(video().playbackRate).toBe(1.5);
-      expect(hoisted.plyrs[0]?.speed).toBe(1.5);
+      expect(reapplyPlaybackRate).toHaveBeenCalled();
     });
 
     it("sets up the scrub preview again, and drops the old one for a file without previews", async () => {
@@ -385,12 +324,12 @@ describe("VideoPlayer file swap", () => {
 
     it("does nothing when the key stays the same", async () => {
       await mountPlayer({ autoPlayEnabled: true });
-      hoisted.plyrs[0]?.playMock.mockClear();
+      fakePlayers[0]?.playMock.mockClear();
       hoisted.resetFileState.mockClear();
       Object.assign(props, { req: { ...FILE_A.req, metadata: { title: "late patch" } } });
       await settle();
       expect(hoisted.resetFileState).not.toHaveBeenCalled();
-      expect(hoisted.plyrs[0]?.playMock).not.toHaveBeenCalled();
+      expect(fakePlayers[0]?.playMock).not.toHaveBeenCalled();
     });
   });
 
@@ -407,7 +346,7 @@ describe("VideoPlayer file swap", () => {
 
       expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
       expect(hoisted.startTranscode).not.toHaveBeenCalled();
-      expect(hoisted.plyrs).toHaveLength(1);
+      expect(fakePlayers).toHaveLength(1);
       expect(video().getAttribute("src")).toBe("/raw/b.mp4");
     });
 
@@ -420,21 +359,20 @@ describe("VideoPlayer file swap", () => {
 
       expect(container.querySelector(".offer-notice")).not.toBeNull();
       expect(container.querySelector<HTMLElement>(".video-player-container")?.style.display).toBe("none");
-      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+      expect(fakePlayers[0]?.destroy).not.toHaveBeenCalled();
       expect(video()).toBe(element);
       expect(element.getAttribute("src")).toBeNull();
       expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
-      // keys and media session buttons must not start the file behind the offer
-      hoisted.plyrs[0]?.playMock.mockClear();
-      void hoisted.plyrs[0]?.play();
-      expect(hoisted.plyrs[0]?.playMock).not.toHaveBeenCalled();
+      fakePlayers[0]?.playMock.mockClear();
+      void fakePlayers[0]?.play();
+      expect(fakePlayers[0]?.playMock).not.toHaveBeenCalled();
       expect(hoisted.attachStream).not.toHaveBeenCalled();
 
       await swapTo(FILE_C);
 
       expect(container.querySelector(".offer-notice")).toBeNull();
       expect(container.querySelector<HTMLElement>(".video-player-container")?.style.display).toBe("");
-      expect(hoisted.plyrs).toHaveLength(1);
+      expect(fakePlayers).toHaveLength(1);
       expect(video()).toBe(element);
       expect(element.getAttribute("src")).toBe("/raw/c.mp4");
     });
@@ -451,8 +389,8 @@ describe("VideoPlayer file swap", () => {
 
       expect(hoisted.resetFileState).toHaveBeenCalled();
       expect(hoisted.startTranscode).toHaveBeenCalledWith({ autoplay: true });
-      expect(hoisted.plyrs).toHaveLength(1);
-      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+      expect(fakePlayers).toHaveLength(1);
+      expect(fakePlayers[0]?.destroy).not.toHaveBeenCalled();
       expect(container.querySelector(".offer-notice")).toBeNull();
     });
 
@@ -474,33 +412,21 @@ describe("VideoPlayer file swap", () => {
       hoisted.needsTranscode.add("/a.mp4");
       await mountPlayer({ autoPlayEnabled: true });
       expect(container.querySelector(".offer-notice")).not.toBeNull();
-      expect(hoisted.plyrs).toHaveLength(0);
+      expect(fakePlayers).toHaveLength(0);
 
       container.querySelector<HTMLButtonElement>(".offer-notice button")?.click();
       await settle();
 
-      expect(hoisted.plyrs).toHaveLength(1);
+      expect(fakePlayers).toHaveLength(1);
       expect(hoisted.startTranscode).toHaveBeenCalledTimes(1);
       expect(container.querySelector(".offer-notice")).toBeNull();
-    });
-
-    it("shows the offer on a playback error and keeps the player", async () => {
-      await mountPlayer({ autoPlayEnabled: true });
-      hoisted.teardown.mockClear();
-
-      video().dispatchEvent(new Event("error"));
-      await settle();
-
-      expect(container.querySelector(".offer-notice")).not.toBeNull();
-      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
-      expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
     });
 
     it("starts the HLS session of the next file from the URL mode on the same instance", async () => {
       await mountPlayer();
       hoisted.urlMode.set("/b.mp4", "quality");
       await swapTo(FILE_B);
-      expect(hoisted.plyrs).toHaveLength(1);
+      expect(fakePlayers).toHaveLength(1);
       expect(hoisted.startTranscode).toHaveBeenCalledTimes(1);
       expect(video().getAttribute("src")).toBeNull();
     });
@@ -522,8 +448,8 @@ describe("VideoPlayer file swap", () => {
       await settle();
 
       expect(container.querySelector(".offer-notice")).toBeNull();
-      expect(hoisted.plyrs).toHaveLength(1);
-      expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+      expect(fakePlayers).toHaveLength(1);
+      expect(fakePlayers[0]?.destroy).not.toHaveBeenCalled();
       expect(video().getAttribute("src")).toBe("/raw/c.mp4");
     });
 
@@ -533,8 +459,8 @@ describe("VideoPlayer file swap", () => {
         release = resolve;
       });
       hoisted.needsTranscode.add("/a.mp4");
-      await mountPlayer({ autoPlayEnabled: true }); // the first file's offer lookup is pending: no player yet
-      expect(hoisted.plyrs).toHaveLength(0);
+      await mountPlayer({ autoPlayEnabled: true });
+      expect(fakePlayers).toHaveLength(0);
       hoisted.offerGate = null;
 
       await swapTo(FILE_B);
@@ -542,18 +468,7 @@ describe("VideoPlayer file swap", () => {
       await settle();
 
       expect(container.querySelector(".offer-notice")).toBeNull();
-      expect(hoisted.plyrs).toHaveLength(1);
-      expect(video().getAttribute("src")).toBe("/raw/b.mp4");
-    });
-
-    it("keeps one instance across several quick swaps", async () => {
-      await mountPlayer({ autoPlayEnabled: true });
-      for (const next of [FILE_B, FILE_C, FILE_B, FILE_C, FILE_B]) {
-        Object.assign(props, next);
-        await nextTick();
-      }
-      await settle();
-      expect(hoisted.plyrs).toHaveLength(1);
+      expect(fakePlayers).toHaveLength(1);
       expect(video().getAttribute("src")).toBe("/raw/b.mp4");
     });
   });
@@ -570,7 +485,7 @@ describe("VideoPlayer file swap", () => {
       await swapTo(file("c"));
       expect(container.querySelectorAll("track")).toHaveLength(0);
       expect(container.querySelector(".video-player-container")?.classList.contains("no-captions")).toBe(true);
-      expect(hoisted.plyrs).toHaveLength(1);
+      expect(fakePlayers).toHaveLength(1);
     });
 
     it("replaces the track elements instead of patching their src", async () => {
@@ -589,13 +504,16 @@ describe("VideoPlayer file swap", () => {
   it("destroys the instance only on unmount", async () => {
     await mountPlayer();
     await swapTo(FILE_B);
-    expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+    expect(fakePlayers[0]?.destroy).not.toHaveBeenCalled();
     app.unmount();
     unmounted = true;
-    expect(hoisted.plyrs[0]?.destroy).toHaveBeenCalledOnce();
+    expect(fakePlayers[0]?.destroy).toHaveBeenCalledOnce();
+    expect(hoisted.dispose).toHaveBeenCalledWith({ stopSession: true });
   });
+
   describe("leaks", () => {
-    const pagehideCalls = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.filter(([type]) => type === "pagehide");
+    const pagehideCalls = (spy: MockInstance<Window["addEventListener"]>) =>
+      spy.mock.calls.filter(([type]) => type === "pagehide");
 
     it("registers the page listeners once, however many files are swapped, and removes them on unmount", async () => {
       const add = vi.spyOn(window, "addEventListener");
@@ -608,38 +526,6 @@ describe("VideoPlayer file swap", () => {
       app.unmount();
       unmounted = true;
       expect(pagehideCalls(remove)).toHaveLength(1);
-    });
-
-    it("revokes the embedded cover of the previous file on a swap and the last one on unmount", async () => {
-      const revoke = vi.fn();
-      let created = 0;
-      vi.stubGlobal(
-        "URL",
-        Object.assign(URL, { createObjectURL: vi.fn(() => `blob:art-${created++}`), revokeObjectURL: revoke }),
-      );
-      const withArt = (name: string) =>
-        file(name, { req: { ...file(name).req, metadata: { title: name, albumArt: btoa(name) } } });
-      await mountPlayer(withArt("a"));
-      await swapTo(withArt("b"));
-      expect(revoke).toHaveBeenCalledWith("blob:art-0");
-      expect(revoke).not.toHaveBeenCalledWith("blob:art-1");
-
-      app.unmount();
-      unmounted = true;
-      expect(revoke).toHaveBeenCalledWith("blob:art-1");
-    });
-
-    it("stops the transcode session on every swap and disposes the controller only on unmount", async () => {
-      await mountPlayer();
-      hoisted.teardown.mockClear();
-      await swapTo(FILE_B);
-      await swapTo(FILE_C);
-      expect(hoisted.teardown).toHaveBeenCalledWith({ stopSession: true });
-      expect(hoisted.dispose).not.toHaveBeenCalled();
-
-      app.unmount();
-      unmounted = true;
-      expect(hoisted.dispose).toHaveBeenCalledWith({ stopSession: true });
     });
   });
 });

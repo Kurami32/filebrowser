@@ -136,14 +136,13 @@ import {
   stripPlaybackTimeFromUrl,
   useMediaPlayer,
 } from "@/composables/player/useMediaPlayer.ts";
-import { useMediaSession } from "@/composables/player/useMediaSession.ts";
+import { buildMediaSessionInfo, useMediaSession } from "@/composables/player/useMediaSession.ts";
 import { usePlaybackQueue } from "@/composables/player/usePlaybackQueue.ts";
 import { useSwipeNavigationGestures } from "@/composables/player/useSwipeNavigationGestures.ts";
 import { useI18n } from "@/i18n/index.ts";
 import { enableSeekOnRelease } from "@/player/seekOnRelease.js";
 import { getters } from "@/store/index.ts";
 import type { FileListItem } from "@/store/types.ts";
-import { globalVars } from "@/utils/constants.ts";
 import { getTypeFromMime } from "@/utils/files.js";
 import type { LyricLines } from "@/utils/lyrics.ts";
 import { formatArtist } from "@/utils/playbackQueue.js";
@@ -303,6 +302,7 @@ const {
   getActiveMediaElement,
   stopMediaElement,
   releaseFile,
+  playWhenReady,
   setMountedFile,
   reapplyPlaybackRate,
   destroyPlayer,
@@ -364,14 +364,7 @@ function setupPlayerEvents(): void {
   setupRewindForwardFeedback();
 }
 
-function mediaSessionInfo() {
-  return {
-    title: metadata.value?.title || fileName.value,
-    artist: metadata.value?.artist || globalVars.name || "Filebrowser Quantum",
-    album: metadata.value?.album || "",
-    artworkSrc: artworkUrl.value,
-  };
-}
+const mediaSessionInfo = () => buildMediaSessionInfo(metadata.value, fileName.value, artworkUrl.value);
 
 let swapGeneration = 0;
 
@@ -391,7 +384,7 @@ async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
   if (generation !== swapGeneration || lifecycle.tornDown || !player.value) return;
   reapplyPlaybackRate();
   if (shouldAutoplay.value) {
-    void Promise.resolve(player.value.play()).catch(() => {});
+    playWhenReady(() => generation === swapGeneration && !lifecycle.tornDown);
   }
 }
 

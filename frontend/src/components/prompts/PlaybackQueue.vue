@@ -305,7 +305,7 @@ function navigateToItem(index: number) {
     return;
   } else {
     // Navigate to different item
-    // mutations.setNavigationTransitioning(true);
+    mutations.setNavigationTransitioning(true);
     navigateToIndex(index);
   }
 }

@@ -1,6 +1,5 @@
 <template>
   <PreviewShell
-    :transition-overlay="false"
     :preview-class="{
       'media-background-light': !isDarkMode && committed?.kind === 'audio',
       'media-background-dark': isDarkMode && committed?.kind === 'audio',
@@ -8,7 +7,6 @@
   >
     <div v-if="previewType === 'audio' || previewType === 'video'" class="av-preview-wrap">
       <AudioPlayer v-if="committed?.kind === 'audio'"
-        key="audio"
         ref="audioRef"
         :file-key="committed.key"
         :req="committed.req"
@@ -23,7 +21,6 @@
         @close-preview="exitPreviewFromImageGesture"
       />
       <VideoPlayer v-else-if="committed?.kind === 'video'"
-        key="video"
         ref="videoRef"
         :file-key="committed.key"
         :raw="committed.raw"
@@ -36,7 +33,7 @@
         @navigate-next="navigateNext"
         @close-preview="exitPreviewFromImageGesture"
       />
-      <div v-if="avLoading" class="av-preview-loading">
+      <div v-if="avMetadataLoading" class="av-preview-loading">
         <LoadingSpinner size="medium" />
       </div>
     </div>
@@ -48,20 +45,35 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, useTemplateRef, w
 import { mediaApi, resourcesApi } from "@/api/index.js";
 import LoadingSpinner from "@/components/LoadingSpinner.vue";
 import PreviewShell from "@/components/files/PreviewShell.vue";
-import {
-  buildSourceKey,
-  type CommittedSource,
-  revokeReplacedSubtitles,
-  revokeSubtitleUrls,
-  type SubtitleSource,
-} from "@/composables/player/committedSource.ts";
 import { usePreviewNavigation } from "@/composables/preview/usePreviewNavigation.ts";
 import { getters, mutations, state } from "@/store/index.ts";
+import type { ReqObject } from "@/store/types.ts";
 import { createAsyncComponent } from "@/utils/asyncComponent.js";
 import { type LyricLines, parseLyrics } from "@/utils/lyrics.ts";
 import { shouldAutoPlayPreview } from "@/utils/previewAutoplay.js";
 import { convertToVTT, getSubtitleFormatExtension } from "@/utils/subtitles.js";
 import { removeLastDir } from "@/utils/url.js";
+
+interface SubtitleSource {
+  name: string;
+  src: string;
+  srclang?: string;
+}
+
+interface CommittedSource {
+  key: string;
+  kind: "audio" | "video";
+  req: ReqObject;
+  raw: string;
+  subtitles: SubtitleSource[];
+  lyrics: LyricLines;
+}
+
+function revokeSubtitleUrls(tracks: readonly SubtitleSource[]): void {
+  for (const subtitle of tracks) {
+    if (subtitle.src.startsWith("blob:")) URL.revokeObjectURL(subtitle.src);
+  }
+}
 
 const AudioPlayer = createAsyncComponent(() => import("@/components/player/AudioPlayer.vue"));
 const VideoPlayer = createAsyncComponent(() => import("@/components/player/VideoPlayer.vue"));
@@ -70,7 +82,7 @@ const videoRef = useTemplateRef<{ destroy?: () => void }>("videoRef");
 const audioRef = useTemplateRef<{ destroy?: () => void }>("audioRef");
 
 /** What the players show; only replaced once everything for the next file is loaded. */
-const committed = shallowRef<CommittedSource<typeof state.req> | null>(null);
+const committed = shallowRef<CommittedSource | null>(null);
 const avMetadataLoading = ref(false);
 /** Skip duplicate media-metadata fetch when patchRequestFileMediaMetadata updates `req` for same file */
 let mediaEnrichDoneForPath: string | null = null;
@@ -102,8 +114,6 @@ const previewType = computed(() => {
   }
   return getters.previewType();
 });
-/** The previous file stays visible, stopped, under this spinner until the next one is committed. */
-const avLoading = computed(() => avMetadataLoading.value || state.navigation.isTransitioning);
 const autoPlay = computed(() =>
   shouldAutoPlayPreview(
     getters.previewPerms().autoplayMedia,
@@ -131,11 +141,13 @@ function buildRaw(): string {
   return resourcesApi.getViewURL(state.req.source, state.req.path, viewToken, null, false, typeHint);
 }
 
-function commitSource(next: CommittedSource<typeof state.req> | null) {
+function commitSource(next: CommittedSource | null) {
   const previous = committed.value;
   committed.value = next;
-  // revoke once the old players are out of the DOM
-  void nextTick().then(() => revokeReplacedSubtitles(previous, next));
+  void nextTick().then(() => {
+    const kept = new Set(next?.subtitles.map((subtitle) => subtitle.src));
+    revokeSubtitleUrls((previous?.subtitles ?? []).filter((subtitle) => !kept.has(subtitle.src)));
+  });
 }
 
 onBeforeUnmount(() => {
@@ -155,7 +167,7 @@ watch(
 
 function mediaIdentity(): string {
   const shareHash = getters.isShare() ? state.shareInfo.hash : "";
-  return buildSourceKey(shareHash, state.req.source, state.req.path);
+  return `${shareHash}|${state.req.source ?? ""}|${state.req.path ?? ""}`;
 }
 
 async function attachDirMediaMetadata(
@@ -196,6 +208,9 @@ async function loadMediaForReq() {
   const owner = loadOwner;
   const isStale = () => owner !== loadOwner;
   inFlightIdentity = identity;
+  if (committed.value) {
+    avMetadataLoading.value = true;
+  }
   try {
     await loadAndCommit(identity, isStale);
   } finally {

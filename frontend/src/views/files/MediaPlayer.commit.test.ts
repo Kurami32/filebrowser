@@ -5,11 +5,12 @@ import {
   defineAsyncComponent,
   defineComponent,
   h,
-  nextTick,
   onBeforeUnmount,
   type PropType,
 } from "vue";
-import type { ReqObject } from "@/store/types.ts";
+import { settle } from "@/composables/player/__tests__/mediaTestUtils.ts";
+import type { FileListItem, ReqObject } from "@/store/types.ts";
+import type { LyricLines } from "@/utils/lyrics.ts";
 import MediaPlayer from "./MediaPlayer.vue";
 
 const hoisted = vi.hoisted(() => ({
@@ -34,7 +35,7 @@ vi.mock("@/api/index.js", () => ({
 vi.mock("@/store/index.ts", async () => {
   const { reactive } = await import("vue");
   const storeState = reactive({
-    req: {} as Record<string, unknown>,
+    req: {} as Partial<ReqObject>,
     shareInfo: {},
     navigation: { isTransitioning: false },
   });
@@ -50,7 +51,7 @@ vi.mock("@/store/index.ts", async () => {
       isPreviewPlaybackQueueNavMode: () => false,
     },
     mutations: {
-      patchRequestFileMediaMetadata: (enriched: Record<string, unknown>) => {
+      patchRequestFileMediaMetadata: (enriched: Partial<ReqObject>) => {
         storeState.req = { ...storeState.req, ...enriched };
       },
       setupNavigation: vi.fn(),
@@ -80,10 +81,10 @@ vi.mock("@/components/player/AudioPlayer.vue", () => ({
   default: defineComponent({
     props: {
       fileKey: { type: String as PropType<string>, default: "" },
-      req: { type: Object as PropType<Record<string, unknown>>, default: () => ({}) },
+      req: { type: Object as PropType<ReqObject>, default: () => ({}) },
       raw: { type: String as PropType<string>, default: "" },
-      lyrics: { type: Array as PropType<unknown[]>, default: () => [] },
-      listing: { type: Array as PropType<unknown[]>, default: () => [] },
+      lyrics: { type: Array as PropType<LyricLines>, default: () => [] },
+      listing: { type: Array as PropType<FileListItem[]>, default: () => [] },
       autoPlayEnabled: Boolean,
     },
     setup(props) {
@@ -99,15 +100,15 @@ vi.mock("@/components/player/AudioPlayer.vue", () => ({
 vi.mock("@/components/player/VideoPlayer.vue", () => ({
   default: defineComponent({
     props: {
-      req: { type: Object as PropType<Record<string, unknown>>, default: () => ({}) },
+      req: { type: Object as PropType<ReqObject>, default: () => ({}) },
       raw: { type: String as PropType<string>, default: "" },
-      subtitlesList: { type: Array as PropType<unknown[]>, default: () => [] },
-      listing: { type: Array as PropType<unknown[]>, default: () => [] },
+      subtitlesList: { type: Array as PropType<{ src: string }[]>, default: () => [] },
+      listing: { type: Array as PropType<FileListItem[]>, default: () => [] },
       autoPlayEnabled: Boolean,
     },
     setup(props) {
       hoisted.videoMounts += 1;
-      return () => h("div", { class: "video-stub", "data-raw": props.raw, "data-subs": (props.subtitlesList as { src: string }[]).map((sub) => sub.src).join(",") });
+      return () => h("div", { class: "video-stub", "data-raw": props.raw, "data-subs": props.subtitlesList.map((sub) => sub.src).join(",") });
     },
   }),
 }));
@@ -115,7 +116,7 @@ vi.mock("@/components/player/VideoPlayer.vue", () => ({
 import { mediaApi } from "@/api/index.js";
 import { state } from "@/store/index.ts";
 
-const audio = (name: string, extra: Record<string, unknown> = {}) =>
+const audio = (name: string, extra: Partial<ReqObject> = {}) =>
   ({
     name,
     type: "audio/mpeg",
@@ -123,7 +124,7 @@ const audio = (name: string, extra: Record<string, unknown> = {}) =>
     path: `/${name}`,
     metadata: { hasLyrics: true },
     ...extra,
-  }) as unknown as ReqObject;
+  }) as ReqObject;
 const video = (name: string) =>
   ({
     name,
@@ -131,16 +132,7 @@ const video = (name: string) =>
     source: "src",
     path: `/${name}`,
     subtitles: [{ name: "en.vtt", embedded: false, srclang: "en" }],
-  }) as unknown as ReqObject;
-
-async function settle() {
-  for (let i = 0; i < 6; i++) {
-    await nextTick();
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
-  }
-}
+  }) as ReqObject;
 
 describe("MediaPlayer committed source", () => {
   let app: App;
@@ -196,7 +188,7 @@ describe("MediaPlayer committed source", () => {
     expect(container.querySelector(".spinner")).toBeNull();
   });
 
-  it("keeps the previous file mounted, under a spinner, until the next one is ready", async () => {
+  it("keeps the previous file mounted until the next one is ready", async () => {
     await mountView(audio("a.mp3"));
     let release = () => {};
     hoisted.gate = new Promise<void>((resolve) => {
@@ -240,7 +232,6 @@ describe("MediaPlayer committed source", () => {
     });
     state.req = audio("b.mp3");
     await settle();
-    // the late patch for the same file replaces `state.req` while the first load still runs
     state.req = { ...state.req, metadata: { hasLyrics: true, title: "patched" } };
     await settle();
     release();

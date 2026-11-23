@@ -743,7 +743,7 @@ function followCurrentItem() {
 
 function navigateToItem(item: ListEntry) {
   mutations.closeTopPrompt();
-  // mutations.setNavigationTransitioning(true);
+  mutations.setNavigationTransitioning(true);
   const isShare = !!props.browseShare || getters.isShare();
   const itemSource = isShare ? state.shareInfo?.hash : item.source || state.req.source;
   url.goToItem(itemSource, item.path, undefined, false, isShare);

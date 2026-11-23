@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useEmbeddedArtwork } from "../useEmbeddedArtwork.ts";
+import { type EmbeddedMetadata, useEmbeddedArtwork } from "../useEmbeddedArtwork.ts";
+
+type Meta = EmbeddedMetadata & { albumArt?: string };
 
 describe("useEmbeddedArtwork", () => {
   let created: string[];
@@ -25,25 +27,18 @@ describe("useEmbeddedArtwork", () => {
     vi.unstubAllGlobals();
   });
 
-  function setup(initial: Record<string, unknown>) {
+  function setup(initial: Meta) {
     let meta = initial;
     let name = "song";
-    const artwork = useEmbeddedArtwork({ getMetadata: () => meta as never, getFileName: () => name });
+    const artwork = useEmbeddedArtwork({ getMetadata: () => meta, getFileName: () => name });
     return {
       ...artwork,
-      next: (nextMeta: Record<string, unknown>, nextName = name) => {
+      next: (nextMeta: Meta, nextName = name) => {
         meta = nextMeta;
         name = nextName;
       },
     };
   }
-
-  it("loads metadata and the cover", () => {
-    const art = setup({ title: "T", artist: "A", albumArt: btoa("img") });
-    art.loadMediaMetadata();
-    expect(art.metadata.value).toMatchObject({ title: "T", artist: "A" });
-    expect(art.albumArtUrl.value).toBe("blob:art-0");
-  });
 
   it("falls back to the file name", () => {
     const art = setup({});

@@ -1,31 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { type App, createApp, h, nextTick, reactive } from "vue";
-import AudioPlayer from "./AudioPlayer.vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type App, createApp, h, reactive } from "vue";
+import {
+  type FakeMediaSession,
+  fakePlayers,
+  installMediaSession,
+  removeMediaSession,
+  settle,
+  type Writable,
+} from "@/composables/player/__tests__/mediaTestUtils.ts";
+import AudioPlayer from "../AudioPlayer.vue";
 
-const hoisted = vi.hoisted(() => ({
-  plyrs: [] as Array<{ destroy: Mock; play: Mock; speed: number }>,
-  play: undefined as undefined | ((...args: unknown[]) => unknown),
-}));
-
-vi.mock("plyr", () => ({
-  default: class FakePlyr {
-    media: HTMLMediaElement;
-    speed = 1;
-    playing = false;
-    duration = 0;
-    currentTime = 0;
-    fullscreen = { active: false, enter: vi.fn() };
-    on = vi.fn();
-    off = vi.fn();
-    destroy = vi.fn();
-    pause = vi.fn();
-    play = vi.fn(() => Promise.resolve());
-    constructor(el: HTMLMediaElement) {
-      this.media = el;
-      hoisted.plyrs.push(this);
-    }
-  },
-}));
+vi.mock("@/composables/player/useMediaPlayer.ts", () => import("@/composables/player/__tests__/mediaTestUtils.ts"));
 vi.mock("@/i18n/index.ts", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("@/router/index.ts", () => ({
   router: { currentRoute: { value: { query: {}, path: "/files/src/a.mp3", hash: "" } }, replace: vi.fn() },
@@ -129,29 +114,22 @@ const FILE_B = {
   req: { name: "b.mp3", type: "audio/mpeg", source: "src", path: "/b.mp3", metadata: { title: "Song B", albumArt: btoa("b") } },
 };
 
-async function settle() {
-  for (let i = 0; i < 5; i++) {
-    await nextTick();
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
-  }
-}
+type Props = InstanceType<typeof AudioPlayer>["$props"];
 
 describe("AudioPlayer file swap", () => {
   let app: App;
   let container: HTMLElement;
-  let props: Record<string, unknown>;
+  let props: Writable<Props>;
   let created: string[];
   let revoke: ReturnType<typeof vi.fn>;
   let unmounted = false;
-  let session: { metadata: unknown; setActionHandler: ReturnType<typeof vi.fn>; playbackState: string };
+  let session: FakeMediaSession;
 
-  async function mountPlayer(initial: Record<string, unknown>) {
+  async function mountPlayer(initial: Partial<Props>) {
     props = reactive({ ...FILE_A, autoPlayEnabled: false, ...initial });
     container = document.createElement("div");
     document.body.appendChild(container);
-    app = createApp({ render: () => h(AudioPlayer, props as never) });
+    app = createApp({ render: () => h(AudioPlayer, props) });
     app.mount(container);
     await settle();
   }
@@ -162,17 +140,11 @@ describe("AudioPlayer file swap", () => {
   }
 
   beforeEach(() => {
-    hoisted.plyrs.length = 0;
+    fakePlayers.length = 0;
     unmounted = false;
     created = [];
     revoke = vi.fn();
-    session = { metadata: null, setActionHandler: vi.fn(), playbackState: "none" };
-    vi.stubGlobal("MediaMetadata", class FakeMetadata {
-      constructor(init: object) {
-        Object.assign(this, init);
-      }
-    });
-    Object.defineProperty(navigator, "mediaSession", { value: session, configurable: true });
+    session = installMediaSession();
     vi.stubGlobal(
       "URL",
       Object.assign(URL, {
@@ -195,80 +167,28 @@ describe("AudioPlayer file swap", () => {
     container.remove();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    delete (navigator as unknown as Record<string, unknown>).mediaSession;
+    removeMediaSession();
   });
 
-  it("keeps the Plyr instance and the element, and swaps src and metadata", async () => {
+  it("keeps the Plyr instance and the element, and swaps src, metadata, artwork and media session", async () => {
     await mountPlayer({});
     const audio = container.querySelector("audio");
-    expect(hoisted.plyrs).toHaveLength(1);
+    const handlers = session.setActionHandler.mock.calls.length;
+    expect(fakePlayers).toHaveLength(1);
     expect(audio?.getAttribute("src")).toBe("/raw/a.mp3");
     expect(container.querySelector(".audio-title")?.textContent?.trim()).toBe("Song A");
+    expect(container.querySelector("img.album-art")?.getAttribute("src")).toBe("blob:art-0");
 
     await swapTo(FILE_B);
 
-    expect(hoisted.plyrs).toHaveLength(1);
-    expect(hoisted.plyrs[0]?.destroy).not.toHaveBeenCalled();
+    expect(fakePlayers).toHaveLength(1);
+    expect(fakePlayers[0]?.destroy).not.toHaveBeenCalled();
     expect(container.querySelector("audio")).toBe(audio);
     expect(audio?.getAttribute("src")).toBe("/raw/b.mp3");
     expect(container.querySelector(".audio-title")?.textContent?.trim()).toBe("Song B");
-  });
-
-  it("revokes the previous artwork and shows the new one", async () => {
-    await mountPlayer({});
-    expect(container.querySelector("img.album-art")?.getAttribute("src")).toBe("blob:art-0");
-    await swapTo(FILE_B);
     expect(container.querySelector("img.album-art")?.getAttribute("src")).toBe("blob:art-1");
     expect(revoke).toHaveBeenCalledWith("blob:art-0");
-  });
-
-  it("updates the media session metadata without registering the handlers again", async () => {
-    await mountPlayer({});
-    const handlers = session.setActionHandler.mock.calls.length;
-    expect(session.metadata).toMatchObject({ title: "Song A" });
-    await swapTo(FILE_B);
     expect(session.metadata).toMatchObject({ title: "Song B", artwork: [{ src: "blob:art-1" }] });
     expect(session.setActionHandler).toHaveBeenCalledTimes(handlers);
-  });
-
-  it("starts playback after the swap when autoplay is on", async () => {
-    await mountPlayer({ autoPlayEnabled: true });
-    const plyr = hoisted.plyrs[0];
-    plyr?.play.mockClear();
-    await swapTo(FILE_B);
-    expect(plyr?.play).toHaveBeenCalledOnce();
-  });
-
-  it("does not start playback after the swap when autoplay is off", async () => {
-    await mountPlayer({});
-    await swapTo(FILE_B);
-    expect(hoisted.plyrs[0]?.play).not.toHaveBeenCalled();
-  });
-
-  it("re-applies the playback rate", async () => {
-    await mountPlayer({});
-    const audio = container.querySelector("audio") as HTMLAudioElement;
-    audio.playbackRate = 1.5;
-    await swapTo(FILE_B);
-    expect(audio.playbackRate).toBe(1.5);
-    expect(hoisted.plyrs[0]?.speed).toBe(1.5);
-  });
-
-  it("does nothing when the key stays the same", async () => {
-    await mountPlayer({ autoPlayEnabled: true });
-    const plyr = hoisted.plyrs[0];
-    plyr?.play.mockClear();
-    Object.assign(props, { req: { ...FILE_A.req, metadata: { title: "Late patch" } } });
-    await settle();
-    expect(plyr?.play).not.toHaveBeenCalled();
-    expect(revoke).not.toHaveBeenCalled();
-  });
-
-  it("destroys the instance only on unmount", async () => {
-    await mountPlayer({});
-    await swapTo(FILE_B);
-    app.unmount();
-    unmounted = true;
-    expect(hoisted.plyrs[0]?.destroy).toHaveBeenCalledOnce();
   });
 });

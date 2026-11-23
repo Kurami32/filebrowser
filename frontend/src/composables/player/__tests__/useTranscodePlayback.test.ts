@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ref, shallowRef } from "vue";
 import { getTranscodeSessions } from "@/api/transcode.js";
 import { useTranscodePlayback } from "../useTranscodePlayback.ts";
-import { withSetup } from "./withSetup.ts";
+import { withSetup } from "./mediaTestUtils.ts";
 
 const hoisted = vi.hoisted(() => ({
   isShare: { value: false },

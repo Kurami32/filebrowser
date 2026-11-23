@@ -118,7 +118,7 @@ import {
   stripPlaybackTimeFromUrl,
   useMediaPlayer,
 } from "@/composables/player/useMediaPlayer.ts";
-import { type MediaSessionInfo, useMediaSession } from "@/composables/player/useMediaSession.ts";
+import { buildMediaSessionInfo, useMediaSession } from "@/composables/player/useMediaSession.ts";
 import { usePlaybackQueue } from "@/composables/player/usePlaybackQueue.ts";
 import { useSwipeNavigationGestures } from "@/composables/player/useSwipeNavigationGestures.ts";
 import { useTranscodePlayback } from "@/composables/player/useTranscodePlayback.ts";
@@ -135,7 +135,6 @@ import {
 import { enableVideoLoadingIndicator } from "@/player/videoLoading.js";
 import { getters, state } from "@/store/index.ts";
 import type { FileListItem, SubtitleTrack as FileSubtitleTrack } from "@/store/types.ts";
-import { globalVars } from "@/utils/constants.ts";
 import { parseTranscodeModeFromQuery } from "@/utils/playbackQuery.js";
 import { getSubtitleFormatExtension } from "@/utils/subtitles.js";
 
@@ -420,6 +419,7 @@ const {
   stopMediaElement,
   setMountedFile,
   releaseFile,
+  playWhenReady,
   reapplyPlaybackRate,
   destroyPlayer,
 } = useMediaPlayer({
@@ -476,17 +476,12 @@ function subtitleTrackLabel(sub: SubtitleTrack): string {
   return ext || sub?.name || "";
 }
 
-/** Plyr-specific: menu state that depends on the file; the next `applyCustomSettings` rebuilds it. */
-function resetFileMenuState(): void {
-  captionSizeMenuInitialized = false; // visibility follows the file's subtitles
-  transcodeMenuInitialized = false; // the selection follows the file's transcode mode
-}
-
 function resetFilePlaybackState(): void {
   resetFileState();
   hasStartedPlayback.value = false;
   resetOverlaidHints();
-  resetFileMenuState();
+  captionSizeMenuInitialized = false;
+  transcodeMenuInitialized = false;
   // HLS playback sets the container's aspect ratio from the stream; the next file starts without it.
   const container = player.value?.elements?.container;
   if (container) {
@@ -494,10 +489,6 @@ function resetFilePlaybackState(): void {
   }
 }
 
-watch(
-  () => state.playbackQueue.isPlaying || false,
-  (isPlaying) => syncOverlaidHintPlayback(isPlaying),
-);
 watch(
   () => props.subtitlesList,
   async (newSubs, oldSubs) => {
@@ -828,23 +819,14 @@ async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
   reapplyPlaybackRate();
   const started = startFile();
   if (shouldAutoplay.value && !shouldStartTranscodeWithFile()) {
-    void Promise.resolve(player.value?.play()).catch(() => {});
+    playWhenReady(isCurrent);
   }
   await started;
 }
 
 watch(() => props.fileKey, onFileSwap, { flush: "pre" });
 
-/** The title, artist, album and artwork of the current file for the browser's media session. */
-function mediaSessionInfo(): MediaSessionInfo {
-  return {
-    title: metadata.value?.title || fileName.value,
-    artist: metadata.value?.artist || globalVars.name || "Filebrowser Quantum",
-    album: metadata.value?.album || "",
-    // Embedded artwork (if any), otherwise the thumbnail/preview url.
-    artworkSrc: artworkUrl.value,
-  };
-}
+const mediaSessionInfo = () => buildMediaSessionInfo(metadata.value, fileName.value, artworkUrl.value);
 
 // --- Transcode ---
 function getTranscodeModeLabel(mode: string): string {
@@ -936,9 +918,13 @@ function setupPlayerEvents(): void {
   setupSharedEvents({
     play: () => {
       hasStartedPlayback.value = true;
+      syncOverlaidHintPlayback(true);
       syncTranscode(false);
     },
-    pause: () => syncTranscode(true),
+    pause: () => {
+      syncOverlaidHintPlayback(false);
+      syncTranscode(true);
+    },
     timeupdate: () => {
       if (transcodePlayback.value?.sessionController) {
         syncTranscode(!player.value?.playing);
