@@ -279,6 +279,9 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
   function resumeFile(): void {
     releasedFor = null;
   }
+  function getReleasedFile(): MountedFileKey | null {
+    return releasedFor;
+  }
 
   /** Marks the file the instance now plays, for the route-leave check. */
   function setMountedFile(source?: string, path?: string): void {
@@ -407,6 +410,7 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     stopMediaElement,
     releaseFile,
     resumeFile,
+    getReleasedFile,
     setMountedFile,
     reapplyPlaybackRate,
     destroyPlayer,

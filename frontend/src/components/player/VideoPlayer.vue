@@ -77,9 +77,8 @@
         :speed-toast-message="speedToastMessage"
       />
     </div>
-    <!-- Queue button (hidden in fullscreen) -->
     <FloatingActionButton
-      v-if="showQueueButton && !transcodeOffer"
+      v-if="!transcodeOffer"
       icon="queue_music"
       :badge="queueCount"
       group="media-controls"
@@ -262,7 +261,6 @@ const {
 } = queue;
 
 const shouldAutoplay = computed(() => props.autoPlayEnabled || playbackQueue.value.length > 1);
-const showQueueButton = computed(() => !isFullscreen.value);
 
 const {
   transcodeMode,
@@ -404,7 +402,7 @@ const swipe = useSwipeNavigationGestures({
   onClosePreview: () => emit("close-preview"),
 });
 const { speedToastVisible, speedToastMessage, setupSwipeGestures, teardownSwipeGestures, clearDismissAnimTimers } = swipe;
-const { isFullscreen, onFullscreenEnter, onFullscreenExit } = useFullscreenState({
+const { onFullscreenEnter, onFullscreenExit } = useFullscreenState({
   onEnter: swipe.resetEdgeGestureImmediate,
 });
 const {
@@ -420,6 +418,7 @@ const {
   setMountedFile,
   releaseFile,
   resumeFile,
+  getReleasedFile,
   reapplyPlaybackRate,
   destroyPlayer,
 } = useMediaPlayer({
@@ -774,9 +773,15 @@ async function restoreFileSource(): Promise<void> {
     return;
   }
   const generation = swapGeneration;
+  const releasedAtStart = getReleasedFile();
   resetFilePlaybackState();
   await nextTick();
-  if (generation !== swapGeneration || lifecycle.unmounted || transcodeOffer.value) {
+  if (
+    generation !== swapGeneration ||
+    getReleasedFile() !== releasedAtStart ||
+    lifecycle.unmounted ||
+    transcodeOffer.value
+  ) {
     return;
   }
   const media = videoElement.value;

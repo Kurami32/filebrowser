@@ -1,4 +1,5 @@
 <template>
+  <Teleport :to="fullscreenHost" :disabled="!fullscreenHost">
   <transition :css="false" @enter="popEnter" @leave="popLeave">
     <div
       v-if="showContext"
@@ -108,6 +109,7 @@
       </button>
     </div>
   </transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -127,6 +129,7 @@ import { isRichTextPreviewMimeType, getTypeInfoFromExt } from "@/utils/mimetype.
 import { isMediaRequest } from "@/utils/mediaFile.js";
 import { actionIconClass } from "@/components/Action.vue";
 import { popEnter, popLeave } from "@/utils/transitions.ts";
+import { useFullscreen } from "@/composables/useFullscreen.ts";
 
 type MenuItem = FileListItem & { isDir?: boolean; from?: string };
 
@@ -153,6 +156,8 @@ const props = withDefaults(
 );
 
 defineOptions({ inheritAttrs: false });
+
+const fullscreenHost = useFullscreen();
 
 function isArchivePath(pathOrName?: string): boolean {
   if (!pathOrName || typeof pathOrName !== "string") return false;
@@ -875,6 +880,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onEscapeKey, true)
   overflow-y: auto;
   overscroll-behavior: contain;
   transform-origin: top left;
+  /* Inside the fullscreen player this would inherit the preview's centered text. */
+  text-align: start;
 }
 
 #context-menu:not(.centered, .overflow-menu) {

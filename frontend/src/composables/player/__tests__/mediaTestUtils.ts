@@ -116,6 +116,7 @@ export function useMediaPlayer(options: Options) {
     stopMediaElement,
     releaseFile: () => options.onReleaseFile?.(),
     resumeFile: () => {},
+    getReleasedFile: () => null,
     setMountedFile: (source?: string, path?: string) => {
       lifecycle.mountedFile = resolveMountedFileKey(source, path);
     },
