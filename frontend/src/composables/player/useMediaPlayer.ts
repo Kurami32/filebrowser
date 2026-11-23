@@ -259,22 +259,6 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     }
   }
 
-  /** Starts the file the instance now holds */
-  function playWhenReady(isCurrent: () => boolean = () => true): void {
-    const media = getActiveMediaElement();
-    const current = player.value;
-    if (!media || !current) return;
-    const tryPlay = () => Promise.resolve(current.play());
-    const retryWhenPlayable = () => {
-      const retry = () => {
-        if (isCurrent() && media.paused) void tryPlay().catch(() => {});
-      };
-      if (media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) retry();
-      else media.addEventListener("canplay", retry, { once: true });
-    };
-    tryPlay().catch(retryWhenPlayable);
-  }
-
   /** Plyr keeps the selected caption by index and track node. When the next file has a track at the same index, Plyr sees "no change" */
   function resetCaptionTrack(): void {
     const captions = (player.value as (Plyr & PlyrRuntime) | null)?.captions;
@@ -423,7 +407,6 @@ export function useMediaPlayer(options: MediaPlayerOptions) {
     stopMediaElement,
     releaseFile,
     resumeFile,
-    playWhenReady,
     setMountedFile,
     reapplyPlaybackRate,
     destroyPlayer,

@@ -420,7 +420,6 @@ const {
   setMountedFile,
   releaseFile,
   resumeFile,
-  playWhenReady,
   reapplyPlaybackRate,
   destroyPlayer,
 } = useMediaPlayer({
@@ -837,11 +836,7 @@ async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
     return;
   }
   reapplyPlaybackRate();
-  const started = startFile();
-  if (shouldAutoplay.value && !shouldStartTranscodeWithFile()) {
-    playWhenReady(isCurrent);
-  }
-  await started;
+  await startFile();
 }
 
 watch(() => props.fileKey, onFileSwap, { flush: "pre" });

@@ -302,7 +302,6 @@ const {
   getActiveMediaElement,
   stopMediaElement,
   releaseFile,
-  playWhenReady,
   setMountedFile,
   reapplyPlaybackRate,
   destroyPlayer,
@@ -394,9 +393,6 @@ async function onFileSwap(newKey?: string, oldKey?: string): Promise<void> {
   await nextTick(); // the template sets the new src
   if (generation !== swapGeneration || lifecycle.tornDown || !player.value) return;
   reapplyPlaybackRate();
-  if (shouldAutoplay.value) {
-    playWhenReady(() => generation === swapGeneration && !lifecycle.tornDown);
-  }
 }
 
 watch(() => props.fileKey, onFileSwap, { flush: "pre" });

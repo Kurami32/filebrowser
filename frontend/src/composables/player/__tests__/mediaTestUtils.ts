@@ -116,9 +116,6 @@ export function useMediaPlayer(options: Options) {
     stopMediaElement,
     releaseFile: () => options.onReleaseFile?.(),
     resumeFile: () => {},
-    playWhenReady: () => {
-      void Promise.resolve(fake?.play()).catch(() => {});
-    },
     setMountedFile: (source?: string, path?: string) => {
       lifecycle.mountedFile = resolveMountedFileKey(source, path);
     },
